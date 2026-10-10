@@ -106,6 +106,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     super.initState();
     _controller.addListener(_onViewerChanged);
     _registerDevHooks();
+    unawaited(_loadZoom());
   }
 
   @override
@@ -410,6 +411,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
   ({double width, double centerX})? _bookRef;
   bool _bookViewSet = false;
 
+  /// The reader's own zoom, on top of the zoom that fits the text to the
+  /// screen. Kept across pages, rotation and sessions until zoomed out.
+  static const _zoomSteps = [1.0, 1.25, 1.5, 2.0, 2.5, 3.0];
+  static const _zoomKey = 'reader_zoom';
+  double _userZoom = 1;
+
+  Future<void> _loadZoom() async {
+    final saved = double.tryParse(await ref.read(localStoreProvider).get(_zoomKey) ?? '');
+    if (!mounted || saved == null || saved <= 1 || !_zoomSteps.contains(saved)) return;
+    setState(() => _userZoom = saved);
+    if (_page != null) unawaited(_applyBookView(_page!));
+  }
+
+  void _stepZoom({required bool inward}) {
+    final i = _zoomSteps.indexOf(_userZoom);
+    final next = _zoomSteps[(i + (inward ? 1 : -1)).clamp(0, _zoomSteps.length - 1)];
+    if (next == _userZoom) return;
+    Haptics.choose();
+    ref.read(readerControllerProvider.notifier).dismiss();
+    unawaited(_controller.textSelectionDelegate.clearTextSelection());
+    setState(() => _userZoom = next);
+    unawaited(ref.read(localStoreProvider).set(_zoomKey, next == 1 ? null : '$next'));
+    if (_page != null) unawaited(_applyBookView(_page!));
+  }
+
   /// White → paper, black → ink, in both themes.
   ColorFilter _paperFilter(ArthColors c) {
     List<double> row(int channel, Color paper, Color ink) {
@@ -493,14 +519,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     final box = await _textBoxOf(page, wait: wait);
     final ref = await _bookRefOf();
     if (box == null || ref == null) {
-      final zoom = math.min(view.width / pdfPage.width, view.height / pdfPage.height);
+      final zoom = math.min(view.width / pdfPage.width, view.height / pdfPage.height) * _userZoom;
       return (zoom: zoom, center: Offset(pdfPage.width / 2, pdfPage.height / 2));
     }
     const side = 20.0; // logical px kept clear either side of the text
     const top = 16.0;
     final byColumn = (view.width - 2 * side) / ref.width;
     final byThisPage = math.min((view.width - 2 * side) / box.width, (view.height - top - 12) / box.height);
-    final zoom = math.min(byColumn, byThisPage);
+    final zoom = math.min(byColumn, byThisPage) * _userZoom;
     final half = view.width / (2 * zoom);
     final low = box.right + side / zoom - half;
     final high = box.left - side / zoom + half;
@@ -981,7 +1007,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
             paper: c.paper,
             snapshot: ({required next, required size}) => _snapshotPage((_page ?? 1) + (next ? 1 : -1), size),
             onTurn: ({required next}) => _showTurnedPage((_page ?? 1) + (next ? 1 : -1)),
-            canStart: () => !_controller.textSelectionDelegate.hasSelectedText,
+            // Zoomed in, a drag pans the page; zoom out to turn it by swiping.
+            canStart: () => _userZoom == 1 && !_controller.textSelectionDelegate.hasSelectedText,
             child: _BookFilter(
               enabled: bookMode,
               filter: _paperFilter(c),
@@ -1002,7 +1029,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                   layoutPages: bookMode ? _bookLayout : null,
                   sizeDelegateProvider: bookMode ? const PdfViewerSizeDelegateProviderLegacy(calculateInitialZoom: _fitPage) : null,
                   pageDropShadow: bookMode ? null : const BoxShadow(color: Colors.black54, blurRadius: 4, spreadRadius: 2, offset: Offset(2, 2)),
-                  panEnabled: !bookMode,
+                  panEnabled: !bookMode || _userZoom > 1,
                   scaleEnabled: !bookMode,
                   // Native scrolling (pdfrx's default flings stop short), with
                   // hard flicks carried further.
@@ -1061,6 +1088,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
           ),
             ),
           ),
+          if (bookMode && _page != null)
+            Positioned(
+              right: 12,
+              bottom: 16 + MediaQuery.paddingOf(context).bottom,
+              child: _ZoomControls(
+                zoom: _userZoom,
+                canIn: _userZoom < _zoomSteps.last,
+                canOut: _userZoom > 1,
+                onIn: () => _stepZoom(inward: true),
+                onOut: () => _stepZoom(inward: false),
+              ),
+            ),
           OverlayPortal(
             controller: _portal,
             overlayChildBuilder: (ctx) => TooltipFollower(
@@ -1112,6 +1151,46 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     }
     _portal.show();
     ref.read(readerControllerProvider.notifier).showSentence(text: s.text, anchor: s.anchor, page: s.page);
+  }
+}
+
+/// Zoom in / out, floating over the page; the level shows between them.
+class _ZoomControls extends ConsumerWidget {
+  const _ZoomControls({required this.zoom, required this.canIn, required this.canOut, required this.onIn, required this.onOut});
+
+  final double zoom;
+  final bool canIn;
+  final bool canOut;
+  final VoidCallback onIn;
+  final VoidCallback onOut;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = ref.watch(stringsProvider);
+    return Material(
+      color: c.card,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(24),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: t.zoomOut,
+            icon: const Icon(Icons.remove_rounded),
+            color: c.accent,
+            onPressed: canOut ? onOut : null,
+          ),
+          if (zoom > 1) Text('${(zoom * 100).round()}%', style: EnglishText.label(c.ink, size: 12)),
+          IconButton(
+            tooltip: t.zoomIn,
+            icon: const Icon(Icons.add_rounded),
+            color: c.accent,
+            onPressed: canIn ? onIn : null,
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -266,6 +266,8 @@ enum AppStrings {
       );
   String get notFound => _('Not in the dictionary.', 'यह शब्द शब्दकोश में नहीं मिला।');
   String get lookingUp => _('Looking this up…', 'अर्थ ढूँढ रहे हैं…');
+  String get zoomIn => _('Zoom in', 'ज़ूम बढ़ाएँ');
+  String get zoomOut => _('Zoom out', 'ज़ूम घटाएँ');
   String get meaning => _('Meaning', 'अर्थ');
   String get copy => _('Copy', 'कॉपी करें');
   String get copied => _('Copied', 'कॉपी हो गया');
