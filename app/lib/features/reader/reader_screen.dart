@@ -40,6 +40,7 @@ import 'package:arth/features/reader/page_text_cache.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:arth/features/reader/reader_guide.dart';
 import 'package:arth/features/reader/reader_menu.dart';
+import 'package:arth/features/reader/reading_tracking.dart';
 import 'package:arth/features/reader/search_sheet.dart';
 import 'package:arth/features/reader/tooltip/tooltip_layer.dart';
 import 'package:arth/features/settings/reading_settings_sheet.dart';
@@ -69,7 +70,10 @@ class ReaderScreen extends ConsumerStatefulWidget {
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose {
+class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose, ReadingTracking {
+  @override
+  int get trackedBookId => widget.book.id;
+
   final _controller = PdfViewerController();
   final _pager = BookPagerController();
   final _link = LayerLink();
@@ -1059,11 +1063,13 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                       ref.read(libraryProvider.notifier).touch(widget.book.id, pageCount: doc.pages.length),
                     );
                     setState(() => _page = controller.pageNumber);
+                    if (controller.pageNumber != null) trackPage(controller.pageNumber!);
                     unawaited(_prefetch(controller.pageNumber ?? 1));
                   },
                   onPageChanged: (p) {
                     if (p == null) return;
                     setState(() => _page = p);
+                    trackPage(p);
                     unawaited(_reportProgress(p));
                     unawaited(_prefetch(p));
                     unawaited(_resolveHighlightRects(_highlightsSeen, p));

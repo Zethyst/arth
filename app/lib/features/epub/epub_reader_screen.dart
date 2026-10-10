@@ -41,6 +41,7 @@ import 'package:arth/features/reader/highlights/highlights_sheet.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:arth/features/reader/reader_guide.dart';
 import 'package:arth/features/reader/reader_menu.dart';
+import 'package:arth/features/reader/reading_tracking.dart';
 import 'package:arth/features/reader/search_sheet.dart';
 import 'package:arth/features/reader/tooltip/tooltip_layer.dart';
 import 'package:arth/features/settings/reading_settings_sheet.dart';
@@ -74,7 +75,10 @@ typedef _WordRange = ({_BlockRef at, int start, int end});
 
 const _pagePadding = EdgeInsets.fromLTRB(22, 20, 22, 120);
 
-class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBreakOnClose {
+class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBreakOnClose, ReadingTracking {
+  @override
+  int get trackedBookId => widget.book.id;
+
   final _link = LayerLink();
   final _portal = OverlayPortalController();
   ReflowBook? _epub;
@@ -893,6 +897,8 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
     }
     final epub = _epub;
     const bookMode = kBookPages;
+    // A page for the habit log: a chapter's page when paged, else the chapter.
+    if (epub != null) trackPage(bookMode ? _chapter * 100000 + _bookPage : _chapter);
 
     return Scaffold(
       appBar: AppBar(
