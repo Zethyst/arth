@@ -67,10 +67,10 @@ class AiLookupButton extends ConsumerWidget {
   }
 }
 
-enum _MenuItem { highlights, bookmarks, note, cards, words }
+enum _MenuItem { highlights, bookmarks, note, cards, words, mode }
 
 class ReaderMoreMenu extends ConsumerWidget {
-  const ReaderMoreMenu({required this.onNote, required this.onCards, super.key, this.onHighlights, this.onBookmarks, this.onWords});
+  const ReaderMoreMenu({required this.onNote, required this.onCards, super.key, this.onHighlights, this.onBookmarks, this.onWords, this.onToggleMode});
 
   final VoidCallback? onHighlights;
   final VoidCallback? onBookmarks;
@@ -79,6 +79,10 @@ class ReaderMoreMenu extends ConsumerWidget {
 
   /// The words looked up in this book (vocabulary).
   final VoidCallback? onWords;
+
+  /// Switch between reading mode (page turns) and scrolling mode; null where
+  /// a reader has only one.
+  final VoidCallback? onToggleMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -116,9 +120,15 @@ class ReaderMoreMenu extends ConsumerWidget {
             onCards();
           case _MenuItem.words:
             onWords?.call();
+          case _MenuItem.mode:
+            onToggleMode?.call();
         }
       },
       itemBuilder: (_) => [
+        if (onToggleMode != null)
+          settings.bookPages
+              ? item(_MenuItem.mode, Icons.swap_vert_rounded, t.scrollingMode)
+              : item(_MenuItem.mode, Icons.auto_stories_outlined, t.readingMode),
         item(_MenuItem.note, Icons.edit_note_rounded, t.addNote),
         item(_MenuItem.cards, Icons.style_outlined, t.cardsForBook),
         if (onWords != null) item(_MenuItem.words, Icons.spellcheck_rounded, t.wordsFromBook),

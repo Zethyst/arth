@@ -78,7 +78,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
   final _pager = BookPagerController();
   final _link = LayerLink();
   final _portal = OverlayPortalController();
-  final GlobalKey _viewerKey = GlobalKey();
+  GlobalKey _viewerKey = GlobalKey();
+
+  /// Which mode the viewer on screen was built for; a change builds a new one.
+  late bool _modeShown = ref.read(settingsProvider).bookPages;
   PageTextCache? _cache;
   Timer? _selectionDebounce;
   bool _selectionHaptic = false;
@@ -262,6 +265,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
 
   Future<void> _highlightFromBar(HighlightBarState s, HighlightColor color) => _saveSelectionHighlight(color);
 
+  /// Reading mode (page turns) ⇄ scrolling mode (an ordinary PDF reader).
+  Future<void> _toggleMode() async {
+    ref.read(readerControllerProvider.notifier).dismiss();
+    unawaited(_controller.textSelectionDelegate.clearTextSelection());
+    Haptics.choose();
+    await ref.read(settingsProvider.notifier).update((s) => s.copyWith(bookPages: !s.bookPages));
+  }
+
   Future<void> _showSearch() async {
     final cache = _cache;
     if (cache == null || !_controller.isReady) return;
@@ -389,7 +400,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
   }
 
   /// Pages are read one at a time and turned with a curl.
-  bool get _bookMode => kBookPages;
+  bool get _bookMode => _modeShown;
 
   /// A tap in the margin beside the text turns the page.
   bool _turnFromEdge(Offset docPos) {
@@ -956,7 +967,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
       unawaited(_resolveHighlightRects(highlights, _page ?? 1));
     }
     final brightness = Theme.of(context).brightness;
-    const bookMode = kBookPages;
+    final bookMode = ref.watch(settingsProvider.select((s) => s.bookPages));
+    if (bookMode != _modeShown) {
+      // Reading mode and scrolling mode lay the pages out differently: start a
+      // fresh viewer on the page the reader is on.
+      _modeShown = bookMode;
+      _viewerKey = GlobalKey();
+      _cache = null;
+      _bookViewSet = false;
+      _textBoxes.clear();
+      _bookRef = null;
+      _settleGeneration++;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -996,6 +1018,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
             ),
             onNote: () => unawaited(_makeCard(const CardDraft(kind: CardKind.idea))),
             onCards: () => context.push(deckRoute((bookId: widget.book.id, bookTitle: widget.book.title))),
+            onToggleMode: () => unawaited(_toggleMode()),
           ),
         ],
       ),
@@ -1021,7 +1044,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                 widget.filePath,
                 key: _viewerKey,
                 controller: _controller,
-                initialPageNumber: widget.initialPage ?? widget.book.lastPage,
+                initialPageNumber: _page ?? widget.initialPage ?? widget.book.lastPage,
                 params: PdfViewerParams(
                   // Book mode: a page's text fills the view and the pager turns it,
                   // so the viewer neither pans nor zooms by itself. White pages

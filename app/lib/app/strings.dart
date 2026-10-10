@@ -291,6 +291,8 @@ enum AppStrings {
   String timeAndDays(String d, int days) => _('$d over ${days == 1 ? '1 day' : '$days days'}', '$days दिन में $d');
   String finishedIn(int days, String d) => _('Finished in ${days == 1 ? '1 day' : '$days days'} ($d of reading)', '${days == 1 ? '1 दिन' : '$days दिन'} में पूरी ($d पढ़ना)');
   String timeLeft(String d) => _('About $d left at your pace', 'आपकी रफ़्तार से लगभग $d बाकी');
+  String get readingMode => _('Reading mode', 'पढ़ने का मोड');
+  String get scrollingMode => _('Scrolling mode', 'स्क्रॉल मोड');
   String get zoomIn => _('Zoom in', 'ज़ूम बढ़ाएँ');
   String get zoomOut => _('Zoom out', 'ज़ूम घटाएँ');
   String get meaning => _('Meaning', 'अर्थ');
