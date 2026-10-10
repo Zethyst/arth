@@ -922,6 +922,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
             tooltip: t.readingSettings,
             onPressed: () => showReadingSettingsSheet(context),
           ),
+          const AiLookupButton(),
           ReaderMoreMenu(
             onWords: () => context.push(Uri(path: '/vocabulary', queryParameters: {'book': '${widget.book.id}', 'title': widget.book.title}).toString()),
             onHighlights: epub == null ? null : _showHighlights,

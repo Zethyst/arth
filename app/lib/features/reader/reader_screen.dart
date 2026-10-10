@@ -955,6 +955,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
             tooltip: t.readingSettings,
             onPressed: () => showReadingSettingsSheet(context),
           ),
+          const AiLookupButton(),
           ReaderMoreMenu(
             onWords: () => context.push(Uri(path: '/vocabulary', queryParameters: {'book': '${widget.book.id}', 'title': widget.book.title}).toString()),
             onHighlights: _showHighlights,
