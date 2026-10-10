@@ -27,6 +27,7 @@ class Settings {
     this.reminderHours = defaultReminderHours,
     this.cardFont = CardFont.montserrat,
     this.bookPages = true,
+    this.usageStats = true,
   });
 
   final ThemeMode themeMode;
@@ -62,6 +63,9 @@ class Settings {
   /// scrolling mode: a book scrolls like an ordinary PDF reader.
   final bool bookPages;
 
+  /// Share anonymous usage stats (see data/analytics.dart).
+  final bool usageStats;
+
   double get hindiScale => switch (hindiSize) {
         HindiSize.small => 0.9,
         HindiSize.medium => 1.0,
@@ -81,6 +85,7 @@ class Settings {
     List<int>? reminderHours,
     CardFont? cardFont,
     bool? bookPages,
+    bool? usageStats,
   }) =>
       Settings(
         themeMode: themeMode ?? this.themeMode,
@@ -95,6 +100,7 @@ class Settings {
         reminderHours: reminderHours ?? this.reminderHours,
         cardFont: cardFont ?? this.cardFont,
         bookPages: bookPages ?? this.bookPages,
+        usageStats: usageStats ?? this.usageStats,
       );
 
   static Future<Settings> load(LocalStore store) async => Settings(
@@ -112,6 +118,7 @@ class Settings {
         reminderHours: _hours(await store.get('reminder_hours')),
         cardFont: CardFont.values.asNameMap()[await store.get('card_font')] ?? CardFont.montserrat,
         bookPages: (await store.get('book_pages') ?? 'true') == 'true',
+        usageStats: (await store.get('usage_stats') ?? 'true') == 'true',
       );
 
   static List<int> _hours(String? stored) {
@@ -132,5 +139,6 @@ class Settings {
     await store.set('reminder_hours', reminderHours.join(','));
     await store.set('card_font', cardFont.name);
     await store.set('book_pages', bookPages.toString());
+    await store.set('usage_stats', usageStats.toString());
   }
 }
