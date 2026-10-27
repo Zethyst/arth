@@ -3,6 +3,8 @@
 // glance after finishing — the story of the book in the reader's own notes —
 // with replay (every card, in order) and practice (flip and rate) on top.
 
+import 'dart:async';
+
 import 'package:arth/app/feel.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/strings.dart';
@@ -99,6 +101,29 @@ class _DeckScreenState extends ConsumerState<DeckScreen> {
     }
   }
 
+  /// Deletes every card in this deck, after asking, and leaves the screen.
+  Future<void> _deleteDeck(int count) async {
+    final t = ref.read(stringsProvider);
+    final c = context.colors;
+    final scale = ref.read(settingsProvider).hindiScale;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.card,
+        title: Text(t.deleteAllCards, style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale)),
+        content: Text(t.deleteDeckConfirm(count), style: uiBody(hindi: t.isHindi, color: c.ink, scale: scale)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.no)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.delete)),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    Haptics.commit();
+    await ref.read(cardsProvider).deleteDeck(widget.deck);
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -149,6 +174,12 @@ class _DeckScreenState extends ConsumerState<DeckScreen> {
                     icon: const Icon(Icons.ios_share_rounded),
                     onPressed: () => _share(button, title: title, bookKey: book?.contentKey ?? cards.first.bookKey, cards: cards),
                   ),
+                ),
+              if (cards != null && cards.isNotEmpty)
+                IconButton(
+                  tooltip: t.deleteAllCards,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  onPressed: () => unawaited(_deleteDeck(cards.length)),
                 ),
             ],
             flexibleSpace: FlexibleSpaceBar(

@@ -944,6 +944,18 @@ class LocalStore {
     return _db.update('flashcards', {'deleted_at': now, 'updated_at': now, 'dirty': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Deletes a whole deck: a book's cards, or a removed book's by title.
+  /// Kept as tombstones, like single deletes, so the delete syncs.
+  Future<int> deleteDeck({int? bookId, String? bookTitle}) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return _db.update(
+      'flashcards',
+      {'deleted_at': now, 'updated_at': now, 'dirty': 1},
+      where: bookId != null ? 'deleted_at IS NULL AND book_id = ?' : 'deleted_at IS NULL AND book_id IS NULL AND book_title = ?',
+      whereArgs: [bookId ?? bookTitle],
+    );
+  }
+
   /// Copies a community deck's cards into this reader's own cards, as new
   /// cards (UUIDs, dirty for sync). With [bookKey] they attach to the local
   /// copy of that book if there is one, and to it later if it's imported.

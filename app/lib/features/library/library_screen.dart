@@ -551,21 +551,42 @@ Future<void> _confirmRemove(BuildContext context, WidgetRef ref, Book book) asyn
   final t = ref.read(stringsProvider);
   final scale = ref.read(settingsProvider).hindiScale;
   final c = context.colors;
+  final cardCount = (await ref.read(localStoreProvider).flashcards(bookId: book.id)).length;
+  if (!context.mounted) return;
+  var withCards = cardCount > 0;
   final ok = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: c.card,
-      title: Text(
-        t.removeBook,
-        style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setInner) => AlertDialog(
+        backgroundColor: c.card,
+        title: Text(
+          t.removeBook,
+          style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(book.title, style: EnglishText.body(c.ink)),
+            // Without this the cards stay behind as a deck of a removed book.
+            if (cardCount > 0)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: withCards,
+                onChanged: (v) => setInner(() => withCards = v ?? false),
+                title: Text(t.alsoDeleteCards(cardCount), style: uiBody(hindi: t.isHindi, color: c.ink, scale: scale, size: 14.5)),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.no)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.remove)),
+        ],
       ),
-      content: Text(book.title, style: EnglishText.body(c.ink)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.no)),
-        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.remove)),
-      ],
     ),
   );
+  if ((ok ?? false) && withCards) await ref.read(cardsProvider).deleteDeck((bookId: book.id, bookTitle: null));
   if (ok ?? false) {
     await ref.read(libraryProvider.notifier).remove(book.id);
     try {

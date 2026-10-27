@@ -289,6 +289,12 @@ class CardsService {
     _changed();
   }
 
+  /// Every card in [deck].
+  Future<void> deleteDeck(DeckRef deck) async {
+    await _store.deleteDeck(bookId: deck.bookId, bookTitle: deck.bookId == null ? deck.bookTitle : null);
+    _changed();
+  }
+
   /// A community deck, copied into this reader's cards.
   Future<int> saveDeck({required String bookTitle, required String? bookKey, required List<({CardKind kind, String front, String back, String note, String? location})> cards}) async {
     final n = await _store.saveDeckCards(bookTitle: bookTitle, bookKey: bookKey, cards: cards);
