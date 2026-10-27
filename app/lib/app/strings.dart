@@ -40,6 +40,12 @@ enum AppStrings {
   String pageRange(int total) => _('1 to $total', '1 से $total तक');
   String pageLabel(int n) => _('Page $n', 'पृष्ठ $n');
   String get removeBook => _('Remove this book?', 'किताब हटाएँ?');
+  String alsoDeleteCards(int n) => _(n == 1 ? 'Also delete its card' : 'Also delete its $n cards', 'इसके $n कार्ड भी हटाएँ');
+  String get deleteAllCards => _('Delete all cards', 'सारे कार्ड हटाएँ');
+  String deleteDeckConfirm(int n) => _(
+        n == 1 ? 'Delete this card? This can’t be undone.' : 'Delete all $n cards of this book? This can’t be undone.',
+        'इस किताब के सारे $n कार्ड हटाएँ? यह वापस नहीं होगा।',
+      );
   String get no => _('No', 'नहीं');
   String get remove => _('Remove', 'हटाएँ');
   String get category => _('Category', 'श्रेणी');
