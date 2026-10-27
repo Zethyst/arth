@@ -1,5 +1,6 @@
-// Dictionary tab: search (local prefix matches as you type, full lookup on
-// submit), recent lookups, and a word of the day.
+// Dictionary tab: search (a dropdown of suggestions as you type: recent
+// lookups, words on the device, close spellings; full lookup on submit),
+// recent lookups, and a word of the day.
 
 import 'dart:async';
 
@@ -33,23 +34,61 @@ class DictionaryScreen extends ConsumerStatefulWidget {
 
 class _DictionaryScreenState extends ConsumerState<DictionaryScreen> {
   final _text = TextEditingController();
-  List<String> _matches = const [];
-  Timer? _debounce;
+  final _focus = FocusNode();
   bool _busy = false;
+
+  /// Nothing on the device starts with what's typed (shown under the field).
+  bool _noMatches = false;
 
   @override
   void dispose() {
     _text.dispose();
-    _debounce?.cancel();
+    _focus.dispose();
     super.dispose();
   }
 
-  void _onChanged(String v) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 120), () async {
-      final q = v.trim().toLowerCase();
-      final m = q.isEmpty ? const <String>[] : await ref.read(localStoreProvider).searchWords(q, limit: 12);
-      if (mounted) setState(() => _matches = m);
+  /// The dropdown under the search field: recent lookups that fit, words that
+  /// start with what's typed (commonest first), and when those run short,
+  /// close spellings. Each with its first Hindi meaning.
+  Future<List<_Suggestion>> _suggestionsFor(String typed) async {
+    final q = typed.trim().toLowerCase();
+    if (q.isEmpty) {
+      _setNoMatches(false);
+      return const [];
+    }
+    final store = ref.read(localStoreProvider);
+    final recent = [
+      for (final w in ref.read(recentLookupsProvider).valueOrNull ?? const <String>[])
+        if (w.toLowerCase().startsWith(q)) w,
+    ].take(3).toList();
+    final prefix = [
+      for (final w in await store.searchWords(q, limit: 10))
+        if (!recent.contains(w)) w,
+    ];
+    var close = const <String>[];
+    if (recent.length + prefix.length < 3 && q.length >= 3) {
+      close = [
+        for (final w in await ref.read(dictionaryRepoProvider).suggestions(q))
+          if (!recent.contains(w) && !prefix.contains(w)) w,
+      ].take(4).toList();
+    }
+    _setNoMatches(recent.isEmpty && prefix.isEmpty);
+    Future<_Suggestion> withMeaning(String w, _SuggestionKind kind) async {
+      final entry = await store.entry(w);
+      return (word: w, meaning: entry?.senses.firstOrNull?.meaning, kind: kind);
+    }
+
+    return Future.wait([
+      for (final w in recent) withMeaning(w, _SuggestionKind.recent),
+      for (final w in prefix) withMeaning(w, _SuggestionKind.match),
+      for (final w in close) withMeaning(w, _SuggestionKind.didYouMean),
+    ]);
+  }
+
+  void _setNoMatches(bool v) {
+    if (v == _noMatches) return;
+    scheduleMicrotask(() {
+      if (mounted) setState(() => _noMatches = v);
     });
   }
 
@@ -123,38 +162,58 @@ class _DictionaryScreenState extends ConsumerState<DictionaryScreen> {
           children: [
             Text(t.dictionaryTitle, style: uiTitle(hindi: t.isHindi, color: c.ink, scale: settings.hindiScale)),
             const SizedBox(height: 18),
-            TextField(
-              controller: _text,
-              style: EnglishText.word(c.ink, size: 26),
-              autocorrect: false,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: t.searchHint,
-                hintStyle: t.isHindi ? h.body(c.inkMuted).copyWith(fontSize: 20) : EnglishText.body(c.inkMuted, size: 20),
-                prefixIcon: Icon(Icons.search_rounded, color: c.inkMuted),
-                suffixIcon: _busy
-                    ? const Padding(
-                        padding: EdgeInsets.all(14),
-                        child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
-                      )
-                    : _text.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: Icon(Icons.close_rounded, color: c.inkMuted),
-                            onPressed: () {
-                              _text.clear();
-                              _onChanged('');
-                            },
-                          ),
+            LayoutBuilder(
+              builder: (ctx, box) => RawAutocomplete<_Suggestion>(
+                textEditingController: _text,
+                focusNode: _focus,
+                displayStringForOption: (o) => o.word,
+                optionsBuilder: (v) => _suggestionsFor(v.text),
+                onSelected: (o) {
+                  _focus.unfocus();
+                  unawaited(_open(o.word));
+                },
+                optionsViewBuilder: (ctx, onSelected, options) => _SuggestionList(
+                  width: box.maxWidth,
+                  query: _text.text.trim().toLowerCase(),
+                  options: options.toList(),
+                  onSelected: onSelected,
+                ),
+                fieldViewBuilder: (ctx, controller, focus, onSubmit) => TextField(
+                  controller: controller,
+                  focusNode: focus,
+                  style: EnglishText.word(c.ink, size: 26),
+                  autocorrect: false,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: t.searchHint,
+                    hintStyle: t.isHindi ? h.body(c.inkMuted).copyWith(fontSize: 20) : EnglishText.body(c.inkMuted, size: 20),
+                    prefixIcon: Icon(Icons.search_rounded, color: c.inkMuted),
+                    suffixIcon: _busy
+                        ? const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                          )
+                        : controller.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: Icon(Icons.close_rounded, color: c.inkMuted),
+                                onPressed: () {
+                                  controller.clear();
+                                  setState(() => _noMatches = false);
+                                },
+                              ),
+                  ),
+                  // Rebuild for the clear button and the empty-state sections.
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (v) {
+                    if (v.trim().isEmpty) return;
+                    focus.unfocus();
+                    unawaited(_open(v));
+                  },
+                ),
               ),
-              onChanged: _onChanged,
-              onSubmitted: (v) => v.trim().isEmpty ? null : _open(v),
             ),
-            if (_matches.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              for (final m in _matches)
-                _WordRow(word: m, onTap: () => _open(m)),
-            ] else if (_text.text.trim().isNotEmpty) ...[
+            if (_noMatches && _text.text.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(t.notOnDevice, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: settings.hindiScale, size: 13)),
             ],
@@ -214,6 +273,105 @@ class _WordRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.rule))),
         child: Text(word, style: EnglishText.body(c.ink, size: 20)),
+      ),
+    );
+  }
+}
+
+enum _SuggestionKind { recent, match, didYouMean }
+
+typedef _Suggestion = ({String word, String? meaning, _SuggestionKind kind});
+
+/// The dropdown: one row per suggestion, the typed part of the word in bold.
+class _SuggestionList extends ConsumerWidget {
+  const _SuggestionList({required this.width, required this.query, required this.options, required this.onSelected});
+
+  final double width;
+  final String query;
+  final List<_Suggestion> options;
+  final AutocompleteOnSelected<_Suggestion> onSelected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = ref.watch(stringsProvider);
+    final h = HindiText(ref.watch(settingsProvider).hindiScale);
+    final firstClose = options.indexWhere((o) => o.kind == _SuggestionKind.didYouMean);
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Material(
+          color: c.card,
+          elevation: 6,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width, maxHeight: MediaQuery.sizeOf(context).height * 0.45),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (_, i) {
+                final o = options[i];
+                final starts = o.word.toLowerCase().startsWith(query) && o.kind != _SuggestionKind.didYouMean;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (i == firstClose)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+                        child: Text(t.didYouMean, style: uiLabel(hindi: t.isHindi, color: c.inkMuted)),
+                      ),
+                    InkWell(
+                      onTap: () => onSelected(o),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        child: Row(
+                          children: [
+                            Icon(
+                              switch (o.kind) {
+                                _SuggestionKind.recent => Icons.history_rounded,
+                                _SuggestionKind.match => Icons.search_rounded,
+                                _SuggestionKind.didYouMean => Icons.spellcheck_rounded,
+                              },
+                              size: 18,
+                              color: c.inkMuted,
+                            ),
+                            const SizedBox(width: 12),
+                            Text.rich(
+                              TextSpan(
+                                style: EnglishText.body(c.ink, size: 18),
+                                children: starts
+                                    ? [
+                                        TextSpan(text: o.word.substring(0, query.length), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                        TextSpan(text: o.word.substring(query.length)),
+                                      ]
+                                    : [TextSpan(text: o.word)],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            if (o.meaning != null)
+                              Expanded(
+                                child: Text(
+                                  o.meaning!,
+                                  style: h.small(c.inkMuted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.right,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
