@@ -42,7 +42,7 @@ enum AppStrings {
   String get removeBook => _('Remove this book?', 'किताब हटाएँ?');
   String alsoDeleteCards(int n) => _(n == 1 ? 'Also delete its card' : 'Also delete its $n cards', 'इसके $n कार्ड भी हटाएँ');
   String get deleteAllCards => _('Delete all cards', 'सारे कार्ड हटाएँ');
-  String deleteDeckConfirm(int n) => _(
+  String deleteAllCardsConfirm(int n) => _(
         n == 1 ? 'Delete this card? This can’t be undone.' : 'Delete all $n cards of this book? This can’t be undone.',
         'इस किताब के सारे $n कार्ड हटाएँ? यह वापस नहीं होगा।',
       );

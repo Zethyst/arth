@@ -111,7 +111,7 @@ class _DeckScreenState extends ConsumerState<DeckScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: c.card,
         title: Text(t.deleteAllCards, style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale)),
-        content: Text(t.deleteDeckConfirm(count), style: uiBody(hindi: t.isHindi, color: c.ink, scale: scale)),
+        content: Text(t.deleteAllCardsConfirm(count), style: uiBody(hindi: t.isHindi, color: c.ink, scale: scale)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.no)),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.delete)),

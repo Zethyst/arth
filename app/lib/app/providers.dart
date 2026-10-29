@@ -183,6 +183,10 @@ class LibraryNotifier extends AsyncNotifier<List<Book>> {
   Future<void> remove(int id) async {
     await ref.read(localStoreProvider).removeBook(id);
     ref.invalidateSelf();
+    // Its cards are now a removed book's deck, found by title, not id.
+    ref
+      ..invalidate(decksProvider)
+      ..invalidate(flashcardsProvider);
   }
 
   Future<void> setCategory(int id, {String? group, String? category}) async {
