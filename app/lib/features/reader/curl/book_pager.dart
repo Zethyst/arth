@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:arth/app/feel.dart';
 import 'package:arth/features/reader/curl/curl_geometry.dart';
 import 'package:arth/features/reader/curl/curl_painter.dart';
 import 'package:flutter/gestures.dart';
@@ -138,6 +139,7 @@ class _BookPagerState extends State<BookPager> with SingleTickerProviderStateMix
   void dispose() {
     widget.controller?._state = null;
     _prefetchTimer?.cancel();
+    PageHaptics.stop();
     _anim.dispose();
     _curl?.dispose();
     _clearReady();
@@ -242,7 +244,10 @@ class _BookPagerState extends State<BookPager> with SingleTickerProviderStateMix
     }
     _dx = total.dx;
     final curl = _curl;
-    if (curl != null) setState(() => curl.fold = _foldFor(curl.dir, _dx));
+    if (curl != null) {
+      setState(() => curl.fold = _foldFor(curl.dir, _dx));
+      PageHaptics.move(curl.fold);
+    }
   }
 
   void _onPointerUp(PointerUpEvent e) {
@@ -324,6 +329,7 @@ class _BookPagerState extends State<BookPager> with SingleTickerProviderStateMix
         _curl = curl;
         curl.fold = _foldFor(dir, _dx);
       });
+      PageHaptics.start(curl.fold, width: geo.flat);
     } finally {
       _preparing = false;
     }
@@ -357,10 +363,14 @@ class _BookPagerState extends State<BookPager> with SingleTickerProviderStateMix
     _anim
       ..stop()
       ..duration = Duration(milliseconds: (220 + 260 * distance).round());
-    void tick() => setState(() => curl.fold = ui.lerpDouble(from, target, Curves.easeOutCubic.transform(_anim.value))!);
+    void tick() {
+      setState(() => curl.fold = ui.lerpDouble(from, target, Curves.easeOutCubic.transform(_anim.value))!);
+      PageHaptics.move(curl.fold);
+    }
     _anim.addListener(tick);
     await _anim.forward(from: 0);
     _anim.removeListener(tick);
+    PageHaptics.stop(landed: commit);
     if (!mounted) return;
     setState(() => curl.fold = target);
     if (commit) {

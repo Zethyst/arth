@@ -15,6 +15,7 @@
 import 'dart:async';
 
 import 'package:arth/app/theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -39,6 +40,127 @@ abstract final class Haptics {
     await HapticFeedback.mediumImpact();
     await Future<void>.delayed(const Duration(milliseconds: 110));
     await HapticFeedback.heavyImpact();
+  }
+}
+
+/// A soft, continuous texture under a page being turned: a light hum while
+/// the curl is on screen, stronger while the page moves fast, easing off when
+/// it slows. iOS plays it with Core Haptics (AppDelegate.swift). Android
+/// can't hum smoothly, so phones with crisp haptic primitives get a soft
+/// tick every so far the page travels, faster as it speeds up, like paper
+/// texture (MainActivity.kt); other phones only feel the page land.
+abstract final class PageHaptics {
+  static const _channel = MethodChannel('arth/haptics');
+
+  static bool _on = false;
+  static Timer? _timer;
+  static final Stopwatch _clock = Stopwatch();
+  static double? _last;
+  static Duration _lastAt = Duration.zero;
+  static double _width = 1;
+  static double _speed = 0;
+  static double _sent = -1;
+  static double _travel = 0;
+  static Duration _tickAt = Duration.zero;
+
+  /// Whether this Android phone plays crisp ticks; null until asked.
+  static bool? _ticks;
+
+  static bool get _ios => defaultTargetPlatform == TargetPlatform.iOS;
+
+  /// The curl has appeared at [position] on a page [width] wide.
+  static void start(double position, {required double width}) {
+    if (!Haptics.enabled || _on) return;
+    _on = true;
+    _width = width <= 0 ? 1 : width;
+    _last = position;
+    _speed = 0;
+    _sent = -1;
+    _travel = 0;
+    _clock
+      ..reset()
+      ..start();
+    _lastAt = Duration.zero;
+    _tickAt = Duration.zero;
+    if (!_ios) {
+      if (_ticks == null && defaultTargetPlatform == TargetPlatform.android) unawaited(_askTicks());
+      return;
+    }
+    unawaited(_invoke('pageStart'));
+    _send();
+    // Moves stop coming while the finger rests: let the hum ease back down.
+    _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      _speed *= 0.86;
+      _send();
+    });
+  }
+
+  /// The page's fold is now at [position].
+  static void move(double position) {
+    final last = _last;
+    if (!_on || last == null) return;
+    final now = _clock.elapsed;
+    final dt = (now - _lastAt).inMicroseconds / 1e6;
+    final d = (position - last).abs();
+    _last = position;
+    _lastAt = now;
+    if (dt <= 0) return;
+    // Page widths a second, smoothed so the hum doesn't flutter.
+    final v = (d / _width) / dt;
+    _speed = _speed * 0.6 + v * 0.4;
+    if (_ios) {
+      _send();
+      return;
+    }
+    if (_ticks != true) return;
+    _travel += d;
+    // A tick every twelfth of the page, never closer than the motor can
+    // keep distinct.
+    if (_travel < _width / 12 || now - _tickAt < const Duration(milliseconds: 22)) return;
+    _travel = 0;
+    _tickAt = now;
+    unawaited(_invoke('pageTick', {'scale': 0.35 + 0.5 * (_speed / 3).clamp(0.0, 1.0)}));
+  }
+
+  /// The page has come to rest; [landed] when it was turned over.
+  static void stop({bool landed = false}) {
+    if (!_on) return;
+    _on = false;
+    _timer?.cancel();
+    _timer = null;
+    _clock.stop();
+    _last = null;
+    if (_ios) unawaited(_invoke('pageStop'));
+    if (landed && Haptics.enabled) unawaited(HapticFeedback.lightImpact());
+  }
+
+  static void _send() {
+    // A floor while the curl is up, rising with speed (about 3 widths a
+    // second is full).
+    final intensity = (0.22 + 0.6 * (_speed / 3).clamp(0.0, 1.0)).clamp(0.0, 1.0);
+    if ((intensity - _sent).abs() < 0.02) return;
+    _sent = intensity;
+    unawaited(_invoke('pageUpdate', {'intensity': intensity, 'sharpness': 0.12 + 0.25 * (intensity - 0.22) / 0.6}));
+  }
+
+  static Future<void> _askTicks() async {
+    try {
+      _ticks = await _channel.invokeMethod<bool>('pageTicks') ?? false;
+    } on PlatformException {
+      _ticks = false;
+    } on MissingPluginException {
+      _ticks = false;
+    }
+  }
+
+  static Future<void> _invoke(String method, [Map<String, Object>? args]) async {
+    try {
+      await _channel.invokeMethod<void>(method, args);
+    } on PlatformException {
+      // No haptics engine (an older phone): the page turns as before.
+    } on MissingPluginException {
+      // Not wired up on this platform.
+    }
   }
 }
 
