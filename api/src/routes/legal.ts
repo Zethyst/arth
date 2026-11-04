@@ -183,4 +183,11 @@ export const legalRoutes: FastifyPluginAsync = async (app) => {
   app.get('/legal/privacy', send(privacy));
   app.get('/legal/terms', send(terms));
   app.get('/legal/delete-account', send(deleteAccount));
+  // AdMob verifies the app against app-ads.txt at the root of the developer
+  // website in the Play listing, which is this host.
+  app.get('/app-ads.txt', async (_req, reply) =>
+    reply.header('cache-control', 'public, max-age=3600').type('text/plain; charset=utf-8').send(APP_ADS_TXT));
 };
+
+/** The authorized sellers of Arth's ad inventory (IAB app-ads.txt). */
+const APP_ADS_TXT = 'google.com, pub-9021040842892703, DIRECT, f08c47fec0942fa0\n';
