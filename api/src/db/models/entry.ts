@@ -42,6 +42,10 @@ const entrySchema = new Schema(
   { versionKey: false, collection: 'entries' },
 );
 entrySchema.index({ freqRank: 1 });
+// The seed's sort, `{ freqRank: 1, _id: 1 }`. Without it Mongo sorts the
+// whole slice in memory, and past 32 MB of entries the query fails: every
+// full /seed and /seed/file then errors before the first line.
+entrySchema.index({ freqRank: 1, _id: 1 });
 // The daily seed delta (`updatedAt > since`) and the seed file's version check.
 entrySchema.index({ updatedAt: -1 });
 

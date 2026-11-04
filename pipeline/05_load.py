@@ -118,6 +118,7 @@ def main() -> None:
     upsert(db["phrases"], list(phrase_ops.values()), "phrases", args.dry_run)
     if not args.dry_run:
         db["entries"].create_index("freqRank")
+        db["entries"].create_index([("freqRank", 1), ("_id", 1)])  # the seed's sort
         db["phrases"].create_index("firstToken")
         db["cache"].create_index("kind")
         print("  indexes ensured")
