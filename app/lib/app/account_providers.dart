@@ -36,12 +36,25 @@ final signedInUidProvider = Provider<String?>((ref) => ref.watch(authUserProvide
 /// The signed-in user's profile from the API; null when signed out.
 final accountProvider = AsyncNotifierProvider<AccountNotifier, Account?>(AccountNotifier.new);
 
+/// How long to wait before asking for the profile again after a failure.
+final accountRetryDelaysProvider = Provider<List<Duration>>((_) => const [Duration(seconds: 2), Duration(seconds: 5)]);
+
 class AccountNotifier extends AsyncNotifier<Account?> {
   @override
   Future<Account?> build() async {
     final user = await ref.watch(authUserProvider.future);
     if (user == null) return null;
-    return ref.read(apiClientProvider).me();
+    final api = ref.read(apiClientProvider);
+    // The plan rides on this: a blip at launch mustn't read as Free.
+    for (final delay in ref.read(accountRetryDelaysProvider)) {
+      try {
+        return await api.me();
+      } on ApiFailure catch (e) {
+        debugPrint('account: $e, trying again');
+        await Future<void>.delayed(delay);
+      }
+    }
+    return api.me();
   }
 
   Future<void> updateProfile({String? displayName, String? bio}) async {
@@ -236,6 +249,9 @@ class SyncNotifier extends Notifier<SyncState> {
           ..invalidate(bookmarksProvider);
       }
       state = SyncState(lastSyncedAt: DateTime.now());
+      // The server answered, so a profile that failed to load can load now.
+      final account = ref.read(accountProvider);
+      if (account.hasError && !account.hasValue && !account.isLoading) ref.invalidate(accountProvider);
     } on ApiFailure catch (e) {
       state = SyncState(phase: SyncPhase.failed, lastSyncedAt: state.lastSyncedAt, error: e.code);
     }

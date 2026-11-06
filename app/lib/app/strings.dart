@@ -554,6 +554,7 @@ enum AppStrings {
       );
   String aiQuotaResets(String date) => _('You’ve used this month’s AI answers. More on $date; the offline dictionary still works.', 'इस महीने के AI जवाब खत्म हो गए। $date से फिर मिलेंगे; ऑफ़लाइन शब्दकोश चलता रहेगा।');
   String get seePlans => _('See plans', 'प्लान देखें');
+  String get planCheckFailed => _('We couldn’t check your plan. Check your connection and try again.', 'आपका प्लान जाँच नहीं पाए। इंटरनेट देखकर फिर कोशिश करें।');
   String get plans => _('Plans', 'प्लान');
   String get plansIntro => _('The dictionary on your phone is always free. AI answers — the meaning in this sentence, sentence translations, rare words — depend on your plan.', 'फ़ोन का शब्दकोश हमेशा मुफ़्त है। AI जवाब — इस वाक्य में मतलब, वाक्य का अनुवाद, दुर्लभ शब्द — आपके प्लान पर निर्भर हैं।');
   String get planFreeAi => _('100 AI answers, to try it out', 'आज़माने के लिए 100 AI जवाब');

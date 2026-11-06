@@ -135,6 +135,23 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
     if (access == CommunityAccess.loading) return Scaffold(appBar: appBar, body: const Center(child: CircularProgressIndicator()));
     if (access == CommunityAccess.locked) return Scaffold(appBar: appBar, body: const CommunityLock());
+    if (access == CommunityAccess.unknown) {
+      return Scaffold(
+        appBar: appBar,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(t.planCheckFailed, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale), textAlign: TextAlign.center),
+                TextButton(onPressed: () => ref.invalidate(accountProvider), child: Text(t.retry)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: appBar,
       body: RefreshIndicator(

@@ -25,10 +25,15 @@ Future<bool> ensurePaid(BuildContext context, WidgetRef ref, {required String ti
   final signedIn = ref.read(signedInUidProvider) != null;
   Account? account;
   if (signedIn) {
+    if (ref.read(accountProvider).hasError) ref.invalidate(accountProvider);
     try {
       account = await ref.read(accountProvider.future);
     } on Exception {
-      account = null;
+      // We can't see their plan, which isn't the same as them not having one.
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(ref.read(stringsProvider).planCheckFailed)));
+      }
+      return false;
     }
   }
   if (account != null && (account.tier != Tier.free || account.isAdmin)) return true;

@@ -151,13 +151,22 @@ class CommunityLock extends ConsumerWidget {
   }
 }
 
-enum CommunityAccess { loading, locked, open }
+enum CommunityAccess {
+  loading,
+
+  /// Signed in, but the account didn't load: we can't say what plan they
+  /// have, so we don't tell them to buy one.
+  unknown,
+  locked,
+  open,
+}
 
 /// Whether this reader may use the community: Pro, Super or an admin.
 final communityAccessProvider = Provider<CommunityAccess>((ref) {
   if (ref.watch(signedInUidProvider) == null) return CommunityAccess.locked;
   final account = ref.watch(accountProvider);
   if (account.isLoading && !account.hasValue) return CommunityAccess.loading;
+  if (account.hasError && !account.hasValue) return CommunityAccess.unknown;
   final a = account.valueOrNull;
   return a != null && (a.tier != Tier.free || a.isAdmin) ? CommunityAccess.open : CommunityAccess.locked;
 });

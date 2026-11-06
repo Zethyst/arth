@@ -34,11 +34,13 @@ class AdsReady extends Notifier<bool> {
   void markReady() => state = true;
 }
 
-/// Whether this reader sees ads: the free tier, or not signed in.
+/// Whether this reader sees ads: the free tier, or not signed in. A plan we
+/// can't see yet is not Free: no ads until the account says so.
 final showAdsProvider = Provider<bool>((ref) {
   if (!ref.watch(adsReadyProvider)) return false;
-  final tier = ref.watch(accountProvider).valueOrNull?.tier ?? Tier.free;
-  return tier == Tier.free;
+  if (ref.watch(authUserProvider).isLoading) return false;
+  if (ref.watch(signedInUidProvider) == null) return true;
+  return ref.watch(accountProvider).valueOrNull?.tier == Tier.free;
 });
 
 /// Asks for consent where required, then starts the SDK. Runs after the
