@@ -61,7 +61,7 @@ describe('POST /v1/coach', () => {
     const sent = llm.requests[0]!.messages;
     assert.equal(sent.filter((m) => m.role === 'assistant').length, 1, 'the coach had a turn');
     assert.equal(sent.filter((m) => m.role === 'user').length, 2, 'the learner had two');
-    assert.ok(sent[0]!.content.includes('David'), 'the scene is in the system prompt');
+    assert.ok(sent[0]!.content.includes('Vikram'), 'the scene is in the system prompt');
   });
 
   test('a correction that only repeats the sentence is dropped', async () => {
@@ -79,6 +79,28 @@ describe('POST /v1/coach', () => {
       payload: { scenario: 'interview', turns: history, said },
     });
     assert.equal(r.json().data.better, undefined);
+  });
+
+  test('a null correction is no correction, and is not worth a retry', async () => {
+    // Strict mode makes every optional property required-but-nullable, so a
+    // turn that needs no correction comes back as better: null. Taking that
+    // for invalid output cost a second model call on the commonest turn there
+    // is — and the retry returned the same null.
+    const llm = new FakeLLM({
+      coach_turn: [
+        JSON.stringify({ reply: 'Accha, go on.', replyHindi: 'अक्का, कहिए।', better: null, closing: null }),
+      ],
+    });
+    const app = buildApp(appOptions(llm));
+    after(() => app.close());
+    const r = await app.inject({
+      method: 'POST',
+      url: '/v1/coach',
+      payload: { scenario: 'interview', turns: history, said: 'I work in marketing.' },
+    });
+    assert.equal(r.statusCode, 200);
+    assert.equal(r.json().data.better, undefined);
+    assert.equal(llm.requests.length, 1, 'one call, not two');
   });
 
   test('the opening line is the scene’s own, whatever the model paraphrases', async () => {

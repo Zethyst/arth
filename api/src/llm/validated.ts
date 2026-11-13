@@ -7,7 +7,7 @@
  * tokens count against it; and the model returns JSON that does not satisfy
  * the schema, which it will usually fix if shown the error.
  */
-import { formatErrors } from '../contracts.js';
+import { formatErrors, withoutNulls } from '../contracts.js';
 import { ApiError } from '../lib/errors.js';
 import type { JsonRequest, JsonResult, LLMProvider, Usage } from './provider.js';
 import { addUsage, zeroUsage } from './provider.js';
@@ -57,7 +57,7 @@ function tryParse<T>(
 ): { ok: true; value: T } | { ok: false; error: string } {
   let value: unknown;
   try {
-    value = JSON.parse(content);
+    value = withoutNulls(JSON.parse(content));
   } catch (e) {
     return { ok: false, error: `not JSON: ${(e as Error).message}` };
   }

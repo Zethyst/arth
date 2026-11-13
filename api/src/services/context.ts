@@ -10,7 +10,7 @@
  */
 import { createHash } from 'node:crypto';
 import type { Config } from '../config.js';
-import { formatErrors, promptExamples, promptText, schemaForModel, validate, type ContextResult, type DictionaryEntry } from '../contracts.js';
+import { formatErrors, promptExamples, promptText, schemaForModel, validate, withoutNulls, type ContextResult, type DictionaryEntry } from '../contracts.js';
 import type { CacheStore } from '../cache/cache.js';
 import type { ChatMessage, JsonRequest, JsonResult, LLMProvider, Usage } from '../llm/provider.js';
 import { ApiError } from '../lib/errors.js';
@@ -191,7 +191,7 @@ function tryParse<T>(
 ): { ok: true; value: T } | { ok: false; error: string } {
   let value: unknown;
   try {
-    value = JSON.parse(content);
+    value = withoutNulls(JSON.parse(content));
   } catch (e) {
     return { ok: false, error: `not JSON: ${(e as Error).message}` };
   }

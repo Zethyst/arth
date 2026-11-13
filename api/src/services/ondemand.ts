@@ -14,6 +14,7 @@ import {
   promptText,
   schemaForModel,
   validate,
+  withoutNulls,
   type DictionaryEntry,
   type EntryGeneration,
   type WiktionaryExtract,
@@ -71,7 +72,7 @@ function checkHindi(path: string, value: string, errors: string[], allowLatin = 
 export function parseGeneration(x: WiktionaryExtract, content: string): { ok: true; entry: DictionaryEntry } | { ok: false; error: string } {
   let raw: unknown;
   try {
-    raw = JSON.parse(content);
+    raw = withoutNulls(JSON.parse(content));
   } catch (e) {
     return { ok: false, error: `not JSON: ${(e as Error).message}` };
   }

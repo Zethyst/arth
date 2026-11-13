@@ -118,6 +118,25 @@ function strictify(node: unknown): unknown {
   return out;
 }
 
+/**
+ * The other half of `schemaForModel`: strict mode made every optional property
+ * required-but-nullable, so a model with nothing to say sends an explicit
+ * `null`. No contract accepts null anywhere, and a null means absent, so the
+ * validator has to see it absent — otherwise it rejects a perfectly good
+ * answer and we pay for a retry that returns the same null. Nulls inside
+ * arrays are left alone: there the length is meaningful.
+ */
+export function withoutNulls(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutNulls);
+  if (node === null || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (v === null) continue;
+    out[k] = withoutNulls(v);
+  }
+  return out;
+}
+
 const ajv = new Ajv({ allErrors: true, strict: true });
 for (const s of Object.values(schemas)) ajv.addSchema(s);
 

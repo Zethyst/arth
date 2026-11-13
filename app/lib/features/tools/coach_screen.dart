@@ -145,7 +145,7 @@ class _CoachCallScreenState extends ConsumerState<CoachCallScreen> {
 
   void _speak(String text) {
     final tts = ref.read(ttsProvider);
-    if (tts.hasEnglish) unawaited(tts.speakEnglish(text));
+    if (tts.hasEnglish) unawaited(tts.speakCoach(text));
   }
 
   void _toBottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -286,7 +286,7 @@ class _Line extends ConsumerWidget {
           ),
           if (!mine && tts.hasEnglish)
             TextButton.icon(
-              onPressed: () => tts.speakEnglish(line.text),
+              onPressed: () => tts.speakCoach(line.text),
               style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
               icon: Icon(Icons.volume_up_rounded, size: 16, color: c.inkMuted),
               label: Text(t.listen, style: uiLabel(hindi: t.isHindi, color: c.inkMuted, scale: scale)),
