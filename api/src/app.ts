@@ -6,6 +6,7 @@ import { accountRoutes, type AccountDeps } from './routes/account.js';
 import { disabledVerifier } from './auth/verifier.js';
 import { memoryAccountStore } from './services/accounts.js';
 import { memoryCommunityStore, type CommunityStore } from './services/community.js';
+import { memoryCouponStore, type CouponStore } from './services/coupons.js';
 import { communityRoutes } from './routes/community.js';
 import { adminRoutes } from './routes/admin.js';
 import { aiGate, openGate } from './auth/ai-gate.js';
@@ -19,9 +20,13 @@ import { seedRoutes } from './routes/seed.js';
 import type { SeedFileCache } from './services/seed-file.js';
 import { legalRoutes } from './routes/legal.js';
 import { billingRoutes } from './routes/billing.js';
+import { couponRoutes } from './routes/coupons.js';
 import { accountDeleteRoutes, type LoginRemover } from './routes/account-delete.js';
 import { disabledBilling, type Billing } from './billing/revenuecat.js';
 import { translateRoutes } from './routes/translate.js';
+import { explainRoutes } from './routes/explain.js';
+import { toolRoutes } from './routes/tools.js';
+import { coachRoutes } from './routes/coach.js';
 import type { CacheStore } from './cache/cache.js';
 import type { Config } from './config.js';
 import rateLimit from '@fastify/rate-limit';
@@ -68,6 +73,8 @@ export type AppOptions = {
   removeLogin?: LoginRemover;
   /** Store purchases (RevenueCat); off when omitted. */
   billing?: { billing: Billing; webhookAuth: string };
+  /** Discount codes; an in-memory store when omitted, so tests need no Mongo. */
+  coupons?: CouponStore;
   /** Entries in the on-device dictionary (SEED_LIMIT); 20000 when omitted. */
   seedLimit?: number;
   /** The prebuilt full seed for /v1/seed/file; a 404 there when omitted. */
@@ -83,6 +90,15 @@ export type AppOptions = {
     | 'LLM_TEMPERATURE'
     | 'LLM_CONTEXT_MAX_TOKENS'
     | 'LLM_TRANSLATE_MAX_TOKENS'
+    | 'LLM_GRAMMAR_MODEL'
+    | 'LLM_SUMMARY_MODEL'
+    | 'LLM_GRAMMAR_MAX_TOKENS'
+    | 'LLM_SUMMARY_MAX_TOKENS'
+    | 'LLM_TOOLS_MODEL'
+    | 'LLM_ENGLISH_MAX_TOKENS'
+    | 'LLM_PROOFREAD_MAX_TOKENS'
+    | 'LLM_COACH_MODEL'
+    | 'LLM_COACH_MAX_TOKENS'
   >;
 };
 
@@ -198,6 +214,21 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         spend,
         gate,
       });
+      await v1.register(explainRoutes, {
+        deps: { config: opts.config, llm: opts.llm, cache: opts.cache, log },
+        spend,
+        gate,
+      });
+      await v1.register(toolRoutes, {
+        deps: { config: opts.config, llm: opts.llm, cache: opts.cache, log },
+        spend,
+        gate,
+      });
+      await v1.register(coachRoutes, {
+        deps: { config: opts.config, llm: opts.llm, cache: opts.cache, log },
+        spend,
+        gate,
+      });
       await v1.register(async (accountScope) => {
         accountScope.addHook('onRequest', accountScope.rateLimit(limited(limits.lookups, messages.rateLimited, deviceKey)));
         const accounts = opts.accounts ?? { store: memoryAccountStore(), verifier: disabledVerifier, cloudinary: null };
@@ -207,6 +238,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         await accountScope.register(adminRoutes, { ...accounts, community, limits: limitsAi });
         await accountScope.register(accountDeleteRoutes, { ...accounts, community, removeLogin: opts.removeLogin });
         await accountScope.register(billingRoutes, { ...accounts, ...(opts.billing ?? { billing: disabledBilling, webhookAuth: '' }) });
+        await accountScope.register(couponRoutes, { ...accounts, coupons: opts.coupons ?? memoryCouponStore() });
       });
     },
     { prefix: '/v1' },

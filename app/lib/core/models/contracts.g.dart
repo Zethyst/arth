@@ -43,6 +43,7 @@ _Sense _$SenseFromJson(Map<String, dynamic> json) => _Sense(
   partOfSpeech: json['partOfSpeech'] as String,
   meaning: json['meaning'] as String,
   definition: json['definition'] as String,
+  styleLabel: json['styleLabel'] as String?,
   examples: (json['examples'] as List<dynamic>)
       .map((e) => BilingualPair.fromJson(e as Map<String, dynamic>))
       .toList(),
@@ -53,6 +54,7 @@ Map<String, dynamic> _$SenseToJson(_Sense instance) => <String, dynamic>{
   'partOfSpeech': instance.partOfSpeech,
   'meaning': instance.meaning,
   'definition': instance.definition,
+  'styleLabel': instance.styleLabel,
   'examples': instance.examples,
 };
 
@@ -135,6 +137,213 @@ Map<String, dynamic> _$PhraseMatchToJson(_PhraseMatch instance) =>
       'start': instance.start,
       'tokenCount': instance.tokenCount,
     };
+
+_RelatedPhrase _$RelatedPhraseFromJson(Map<String, dynamic> json) =>
+    _RelatedPhrase(
+      phrase: json['phrase'] as String,
+      kind: $enumDecode(_$RelatedPhraseKindEnumMap, json['kind']),
+      partOfSpeech: json['partOfSpeech'] as String,
+      meaning: json['meaning'] as String,
+    );
+
+Map<String, dynamic> _$RelatedPhraseToJson(_RelatedPhrase instance) =>
+    <String, dynamic>{
+      'phrase': instance.phrase,
+      'kind': _$RelatedPhraseKindEnumMap[instance.kind]!,
+      'partOfSpeech': instance.partOfSpeech,
+      'meaning': instance.meaning,
+    };
+
+const _$RelatedPhraseKindEnumMap = {
+  RelatedPhraseKind.phrasal: 'phrasal',
+  RelatedPhraseKind.idiom: 'idiom',
+};
+
+_GrammarNote _$GrammarNoteFromJson(Map<String, dynamic> json) => _GrammarNote(
+  source: json['source'] as String,
+  shape: json['shape'] as String,
+  points: (json['points'] as List<dynamic>)
+      .map((e) => GrammarNotePoints.fromJson(e as Map<String, dynamic>))
+      .toList(),
+);
+
+Map<String, dynamic> _$GrammarNoteToJson(_GrammarNote instance) =>
+    <String, dynamic>{
+      'source': instance.source,
+      'shape': instance.shape,
+      'points': instance.points,
+    };
+
+_GrammarNotePoints _$GrammarNotePointsFromJson(Map<String, dynamic> json) =>
+    _GrammarNotePoints(
+      part: json['part'] as String,
+      label: json['label'] as String,
+      note: json['note'] as String,
+    );
+
+Map<String, dynamic> _$GrammarNotePointsToJson(_GrammarNotePoints instance) =>
+    <String, dynamic>{
+      'part': instance.part,
+      'label': instance.label,
+      'note': instance.note,
+    };
+
+_PassageSummary _$PassageSummaryFromJson(Map<String, dynamic> json) =>
+    _PassageSummary(
+      summary: json['summary'] as String,
+      points: (json['points'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
+      people: (json['people'] as List<dynamic>?)
+          ?.map((e) => PassageSummaryPeople.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+
+Map<String, dynamic> _$PassageSummaryToJson(_PassageSummary instance) =>
+    <String, dynamic>{
+      'summary': instance.summary,
+      'points': instance.points,
+      'people': instance.people,
+    };
+
+_PassageSummaryPeople _$PassageSummaryPeopleFromJson(
+  Map<String, dynamic> json,
+) => _PassageSummaryPeople(
+  name: json['name'] as String,
+  who: json['who'] as String,
+);
+
+Map<String, dynamic> _$PassageSummaryPeopleToJson(
+  _PassageSummaryPeople instance,
+) => <String, dynamic>{'name': instance.name, 'who': instance.who};
+
+_EnglishDraft _$EnglishDraftFromJson(Map<String, dynamic> json) =>
+    _EnglishDraft(
+      english: json['english'] as String,
+      vocab: (json['vocab'] as List<dynamic>)
+          .map((e) => EnglishDraftVocab.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      alternatives: (json['alternatives'] as List<dynamic>)
+          .map(
+            (e) => EnglishDraftAlternatives.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
+    );
+
+Map<String, dynamic> _$EnglishDraftToJson(_EnglishDraft instance) =>
+    <String, dynamic>{
+      'english': instance.english,
+      'vocab': instance.vocab,
+      'alternatives': instance.alternatives,
+    };
+
+_EnglishDraftVocab _$EnglishDraftVocabFromJson(Map<String, dynamic> json) =>
+    _EnglishDraftVocab(en: json['en'] as String, hi: json['hi'] as String);
+
+Map<String, dynamic> _$EnglishDraftVocabToJson(_EnglishDraftVocab instance) =>
+    <String, dynamic>{'en': instance.en, 'hi': instance.hi};
+
+_EnglishDraftAlternatives _$EnglishDraftAlternativesFromJson(
+  Map<String, dynamic> json,
+) => _EnglishDraftAlternatives(
+  tone: $enumDecode(_$EnglishDraftAlternativesToneEnumMap, json['tone']),
+  text: json['text'] as String,
+);
+
+Map<String, dynamic> _$EnglishDraftAlternativesToJson(
+  _EnglishDraftAlternatives instance,
+) => <String, dynamic>{
+  'tone': _$EnglishDraftAlternativesToneEnumMap[instance.tone]!,
+  'text': instance.text,
+};
+
+const _$EnglishDraftAlternativesToneEnumMap = {
+  EnglishDraftAlternativesTone.formal: 'formal',
+  EnglishDraftAlternativesTone.casual: 'casual',
+  EnglishDraftAlternativesTone.direct: 'direct',
+};
+
+_Proofread _$ProofreadFromJson(Map<String, dynamic> json) => _Proofread(
+  corrected: json['corrected'] as String,
+  fixes: (json['fixes'] as List<dynamic>)
+      .map((e) => ProofreadFixes.fromJson(e as Map<String, dynamic>))
+      .toList(),
+  alternatives: (json['alternatives'] as List<dynamic>)
+      .map((e) => ProofreadAlternatives.fromJson(e as Map<String, dynamic>))
+      .toList(),
+);
+
+Map<String, dynamic> _$ProofreadToJson(_Proofread instance) =>
+    <String, dynamic>{
+      'corrected': instance.corrected,
+      'fixes': instance.fixes,
+      'alternatives': instance.alternatives,
+    };
+
+_ProofreadAlternatives _$ProofreadAlternativesFromJson(
+  Map<String, dynamic> json,
+) => _ProofreadAlternatives(
+  tone: $enumDecode(_$ProofreadAlternativesToneEnumMap, json['tone']),
+  text: json['text'] as String,
+);
+
+Map<String, dynamic> _$ProofreadAlternativesToJson(
+  _ProofreadAlternatives instance,
+) => <String, dynamic>{
+  'tone': _$ProofreadAlternativesToneEnumMap[instance.tone]!,
+  'text': instance.text,
+};
+
+const _$ProofreadAlternativesToneEnumMap = {
+  ProofreadAlternativesTone.formal: 'formal',
+  ProofreadAlternativesTone.casual: 'casual',
+  ProofreadAlternativesTone.concise: 'concise',
+};
+
+_ProofreadFixes _$ProofreadFixesFromJson(Map<String, dynamic> json) =>
+    _ProofreadFixes(
+      wrong: json['wrong'] as String,
+      right: json['right'] as String,
+      kind: $enumDecode(_$ProofreadFixesKindEnumMap, json['kind']),
+      why: json['why'] as String,
+    );
+
+Map<String, dynamic> _$ProofreadFixesToJson(_ProofreadFixes instance) =>
+    <String, dynamic>{
+      'wrong': instance.wrong,
+      'right': instance.right,
+      'kind': _$ProofreadFixesKindEnumMap[instance.kind]!,
+      'why': instance.why,
+    };
+
+const _$ProofreadFixesKindEnumMap = {
+  ProofreadFixesKind.spelling: 'spelling',
+  ProofreadFixesKind.grammar: 'grammar',
+  ProofreadFixesKind.wording: 'wording',
+};
+
+_CoachTurn _$CoachTurnFromJson(Map<String, dynamic> json) => _CoachTurn(
+  reply: json['reply'] as String,
+  replyHindi: json['replyHindi'] as String,
+  better: json['better'] == null
+      ? null
+      : CoachTurnBetter.fromJson(json['better'] as Map<String, dynamic>),
+  closing: json['closing'] as bool?,
+);
+
+Map<String, dynamic> _$CoachTurnToJson(_CoachTurn instance) =>
+    <String, dynamic>{
+      'reply': instance.reply,
+      'replyHindi': instance.replyHindi,
+      'better': instance.better,
+      'closing': instance.closing,
+    };
+
+_CoachTurnBetter _$CoachTurnBetterFromJson(Map<String, dynamic> json) =>
+    _CoachTurnBetter(text: json['text'] as String, why: json['why'] as String);
+
+Map<String, dynamic> _$CoachTurnBetterToJson(_CoachTurnBetter instance) =>
+    <String, dynamic>{'text': instance.text, 'why': instance.why};
 
 _ApiError _$ApiErrorFromJson(Map<String, dynamic> json) => _ApiError(
   code: $enumDecode(_$ApiErrorCodeEnumMap, json['code']),

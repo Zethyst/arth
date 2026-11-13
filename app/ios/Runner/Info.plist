@@ -104,5 +104,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Arth listens while you practise saying a word, to tell you how close you got.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Arth uses speech recognition to check the word you said against the word you were given.</string>
 </dict>
 </plist>

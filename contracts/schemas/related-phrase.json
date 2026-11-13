@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/related-phrase.json",
+  "title": "RelatedPhrase",
+  "description": "One idiom or phrasal verb built on a headword, as GET /phrases/of lists them. The phrase has its own full entry; this is the line that links to it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phrase", "kind", "partOfSpeech", "meaning"],
+  "properties": {
+    "phrase": { "type": "string", "description": "The canonical phrase; a key into `entries`." },
+    "kind": {
+      "type": "string",
+      "enum": ["phrasal", "idiom"],
+      "description": "`phrasal` when the phrase is the headword plus particles only (get up, get away with); `idiom` otherwise (get cold feet)."
+    },
+    "partOfSpeech": { "type": "string", "description": "The phrase's part of speech in Hindi, from its first sense." },
+    "meaning": { "type": "string", "description": "The phrase's first Hindi sense — the headline for the list." }
+  }
+}

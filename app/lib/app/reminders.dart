@@ -7,7 +7,10 @@ import 'dart:async';
 
 import 'package:arth/app/providers.dart';
 import 'package:arth/data/card_reminders.dart';
+import 'package:arth/data/daily_idiom_reminder.dart';
 import 'package:arth/data/local_notifications.dart';
+import 'package:arth/data/local_store.dart';
+import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +27,70 @@ final cardRemindersProvider = Provider<CardReminders>((ref) {
   reminders.reschedule();
   return reminders;
 });
+
+/// One idiom a day, scheduled on the device from the idioms already on it.
+final dailyIdiomReminderProvider = Provider<DailyIdiomReminder>((ref) {
+  final reminders = DailyIdiomReminder(ref);
+  ref
+    ..listen(idiomsProvider, (_, _) => reminders.reschedule())
+    ..listen(settingsProvider.select((s) => (s.dailyIdiom, s.dailyIdiomHour, s.language)), (_, _) => reminders.reschedule())
+    ..onDispose(reminders.dispose);
+  reminders.reschedule();
+  return reminders;
+});
+
+class DailyIdiomReminder {
+  DailyIdiomReminder(this._ref);
+
+  final Ref _ref;
+  Timer? _debounce;
+
+  /// A band of its own, clear of the card reminders at 7000.
+  static const _firstId = 7200;
+
+  void reschedule() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(seconds: 2), () => unawaited(_apply()));
+  }
+
+  void dispose() => _debounce?.cancel();
+
+  Future<void> _apply() async {
+    final local = _ref.read(localNotificationsProvider);
+    if (!local.ready) return;
+    try {
+      final pending = await local.plugin.pendingNotificationRequests();
+      for (final p in pending) {
+        if (p.id >= _firstId && p.id < _firstId + 100) await local.plugin.cancel(id: p.id);
+      }
+      final settings = _ref.read(settingsProvider);
+      if (!settings.dailyIdiom) return;
+      final idioms = _ref.read(idiomsProvider).valueOrNull ?? const <IdiomRow>[];
+      final slots = planDailyIdioms(idioms: idioms, now: DateTime.now(), hour: settings.dailyIdiomHour);
+      if (slots.isEmpty) return;
+
+      final store = _ref.read(localStoreProvider);
+      if (await store.get('reminder_permission_asked') == null) {
+        await store.set('reminder_permission_asked', 'true');
+        await local.requestPermission();
+      }
+      final t = _ref.read(stringsProvider);
+      for (final (i, slot) in slots.indexed) {
+        await local.plugin.zonedSchedule(
+          id: _firstId + i,
+          scheduledDate: tz.TZDateTime.from(slot.at, tz.local),
+          title: t.dailyIdiomTitle,
+          body: t.dailyIdiomBody(slot.idiom.phrase, slot.idiom.meaning),
+          notificationDetails: LocalNotifications.details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          payload: '/idioms',
+        );
+      }
+    } on Exception catch (e) {
+      debugPrint('daily idiom: $e');
+    }
+  }
+}
 
 class CardReminders {
   CardReminders(this._ref);

@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/account.dart';
 import 'package:arth/data/community.dart';
+import 'package:arth/data/coupon.dart';
 import 'package:dio/dio.dart';
 
 /// Base URL, set at build time:
@@ -181,6 +182,18 @@ class ApiClient {
   /// webhook reaches the API. The plan it gives is returned.
   Future<String> billingSync() => _call(() => _dio.post('/billing/sync'), (d) => d['tier'] as String);
 
+  /// Is this discount code good for me, and which store offer does it unlock?
+  /// Spends nothing — a reader who checks a code and then does not buy still
+  /// has it. Throws [ApiFailure] (404) when the code cannot be used; its
+  /// message is the Hindi line to show.
+  Future<CouponOffer> checkCoupon(String code) =>
+      _call(() => _dio.post('/coupons/check', data: {'code': code}), CouponOffer.fromJson);
+
+  /// The store took the money at the discounted price: count the code. Safe
+  /// to repeat — the API records one redemption per reader per code.
+  Future<CouponOffer> claimCoupon(String code) =>
+      _call(() => _dio.post('/coupons/claim', data: {'code': code}), CouponOffer.fromJson);
+
   Future<void> unregisterPushToken(String token) async {
     try {
       _data(await _dio.delete<Map<String, dynamic>>('/me/push-token', data: {'token': token}));
@@ -337,6 +350,73 @@ class ApiClient {
     }
   }
 
+  /// How the sentence is built, in Hindi. The translation says what it means;
+  /// this says how it works.
+  Future<GrammarNote> grammar({required String text, String? context}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/grammar',
+        data: {'text': text, 'context': ?context},
+      );
+      return GrammarNote.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// What happened in this stretch of the book, in Hindi.
+  Future<PassageSummary> summary({required String text}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>('/summary', data: {'text': text});
+      return PassageSummary.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// What the reader wants to say, in English — the other direction from
+  /// [translate], for somebody who knows the meaning but not the words.
+  Future<EnglishDraft> toEnglish({required String text}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>('/english', data: {'text': text});
+      return EnglishDraft.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// The reader's own English, corrected, with each fix quoted from the text.
+  Future<Proofread> proofread({required String text}) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>('/proofread', data: {'text': text});
+      return Proofread.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// The coach's next turn in a spoken practice conversation. [said] is empty
+  /// only for the scene's opening line.
+  Future<CoachTurn> coach({
+    required String scenario,
+    required List<({String role, String text})> turns,
+    required String said,
+  }) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/coach',
+        data: {
+          'scenario': scenario,
+          'turns': [for (final t in turns) {'role': t.role, 'text': t.text}],
+          'said': said,
+        },
+      );
+      return CoachTurn.fromJson(_data(res));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
   /// A cover image URL for a book of this title (and author, if known), or
   /// null when none matches well. Throws [ApiFailure] if the server can't be
   /// reached, so a caller can tell "no cover" from "try again later".
@@ -363,6 +443,18 @@ class ApiClient {
         return null;
       }
       return PhraseMatch.fromJson(body['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
+  /// The idioms and phrasal verbs built on [word]. Pure dictionary, no AI:
+  /// an empty list is a normal answer.
+  Future<List<RelatedPhrase>> phrasesOf(String word) async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/phrases/of', queryParameters: {'word': word});
+      final items = _data(res)['items'] as List<dynamic>? ?? const [];
+      return [for (final i in items) RelatedPhrase.fromJson(i as Map<String, dynamic>)];
     } on DioException catch (e) {
       throw _failure(e);
     }

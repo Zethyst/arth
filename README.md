@@ -150,6 +150,400 @@ generates its Hindi layer live with the pipeline's prompt and validation, stores
 staged either gets a 404 whose `suggestions` are morphological bases (`brimlessness` →
 `brimless`, `brim`). Generation spends the per-device LLM budget like any model call.
 
+## How many meanings a word gets
+
+`config.max_senses_per_entry` (pipeline) caps the senses one headword keeps. It was **8**,
+and 4,080 of the 23,001 entries — 18%, and exactly the words readers tap most (`get`, `set`,
+`run`, `up`, `out`) — sat on that cap, which is why "get" showed eight meanings where Oxford
+shows forty. It is now **25**.
+
+Which senses survive, and in what order:
+
+- `wiktionary.py:DROP_SENSE_TAGS` drops a sense outright for one of two reasons only: nobody
+  writes that English any more (`obsolete`, `misspelling`), or the app cannot show it to a
+  school student beside an ad (`vulgar`, `offensive`, `derogatory`).
+- **Slang, informal, humorous, rare, dialectal and nonstandard senses are kept** and labelled.
+  They used to be dropped or docked 8 points, which with 8 slots meant they were never seen.
+- `03_extract.py:RANK_PENALTY` only decides the *order*: archaic −5, rare −5, literary −3,
+  slang −2, informal −1, and so on. One penalty per sense, the heaviest — a sense tagged both
+  archaic and slang is not twice as obscure. A well-attested slang sense still outranks a
+  plain sense nobody uses.
+- `Sense.styleLabel` carries Wiktionary's own label into the app in Hindi — स्लैंग, अनौपचारिक,
+  पुराना, ब्रिटिश, कम प्रचलित — shown beside the part of speech. It is **set from the tags, never
+  written by the model**: the model is not even shown it, so it costs no tokens and cannot be
+  invented. Entries written before style labels simply have none.
+
+`RESTRICTED_TAGS` is a different question and did not change: not "may a reader see this
+sense?" but "may this entry define a phrase, or say that one word is a form of another?".
+A slang spelling (`geaux` → `go`) must never steer lemma resolution.
+
+Re-running after a cap or tag change. `data/select-full.json` already holds the exact 23,001
+headwords of the live dictionary, so only the extract is rebuilt — same words, new senses.
+The dump is not in git (3.2 GB) and `01_download.py` is resumable:
+
+```sh
+cd pipeline
+.venv/bin/python 01_download.py
+.venv/bin/python 03_extract.py --in data/select-full.json --out data/extract-new.json
+.venv/bin/python tool/diff_extracts.py                 # what actually changed, and what it costs
+.venv/bin/python 04_generate.py --mode batch --words-file data/regenerate.txt
+.venv/bin/python 05_load.py --in data/generated-new.jsonl
+.venv/bin/python 08_stage.py                           # the ~90k staged lemmas share the cap
+```
+
+Only words whose **senses** changed need the model. A word that merely gained a style label
+on senses it already had is patched in place — the label comes from Wiktionary, not from the
+model, so re-generating it would be paying for Hindi we already have. `diff_extracts.py`
+splits the two piles and prices the first. Phones pick the change up as the daily `since`
+delta, not a fresh download.
+
+## Idioms, slang and phrasal verbs
+
+A multi-word entry (`get up`, `in want of`, `get cold feet`) has always been a full
+`DictionaryEntry` with its own Hindi senses — there are ~3,000 — but nothing linked a word to
+the phrases built on it, so they were reachable only by tapping the phrase inside a book. The
+word screen now lists them, in two groups:
+
+- **Phrasal verbs** — the headword plus particles and nothing else: `get up`, `get away with`.
+- **Idioms and phrases** — anything else that uses the word: `get cold feet`, `in want of`.
+
+The split is `phraseKind()`, written twice against one closed particle list
+(`api/src/services/related-phrases.ts`, `app/lib/core/text/related_phrases.dart`) so a phrase
+answered from the phone reads exactly like one answered by the server. Tapping a line opens
+that phrase's own entry.
+
+Nothing here is generated: it is the dictionary the reader already has, linked up. The app
+answers from its own `phrases` table first — ~2,800 of the 3,000 are inside the on-device
+slice — and only falls back to `GET /v1/phrases/of?word=get` when the phone has no dictionary
+yet. An empty list is a normal answer, not a 404.
+
+## Hard words on this page
+
+Reader ⋮ → **Hard words on this page**: every uncommon word on the page in
+front of the reader, in one list, rarest first, each with its Hindi meaning
+already filled in. Tapping one opens exactly the card a tap on the word in
+the text would — the sheet is a way in, not a second kind of answer. In all
+three readers; an EPUB has no pages, so "this page" is the paragraphs
+currently laid out.
+
+Entirely offline: which words are hard is decided by `freqRank`, at the same
+threshold the reader already uses to decide when a word is worth an AI answer
+(`kAiOnRequestRank`), so the list and the tooltip agree about what counts as
+common. `app/lib/features/reader/page_vocabulary.dart`:
+
+- **A word the phone's dictionary doesn't have is the rarest of all**, not the
+  least rare. The on-device slice is the commonest 20,000 words, so a miss
+  means rarer than anything in it. Sorting those last put `refreshments` above
+  `obsequious`, which is the opposite of the point.
+- **A name is not vocabulary.** Dropped when it is capitalised mid-sentence,
+  and also when it is capitalised *every* time it appears on the page **and**
+  the dictionary has never heard of it — `Elizabeth` opens sentences too, and
+  otherwise led the list. Both halves are needed: `Printed` at the head of the
+  only sentence it is in is always capitalised as well, and it is a real word.
+- Under four letters, or carrying a digit, and it is a preposition or a page
+  number rather than something to learn.
+
+## Idioms
+
+Dictionary tab → **Idioms**. 2,241 English idioms that have a Hindi
+meaning, definition and examples in the dictionary, selected by
+`pipeline/09_idioms.py` from Wiktionary's own `idiomatic` sense tag. Nothing
+is generated: the LLM is never called for this, at build time or at run time.
+
+| | |
+|---|---|
+| **Today's ten** (`/idioms`) | Ten a day, one card at a time. The front is the phrase and what it means; turning it over shows it doing its job in a real sentence, with the Hindi underneath. Save, skip, next. |
+| **Browse** (`/idioms/all`) | All of them, searchable in either language, with a filter for the ones kept. |
+| **Practice** (`/idioms/practice`) | "Which meaning fits?" — the wrong answers are *other idioms' meanings*, so the choice is a real test rather than one plausible line among filler. Idioms the reader keeps getting wrong are asked first. |
+| **One idiom** (`/idiom/:phrase`) | Meaning, it in a sentence, its register labels, and "the story behind it" where Wiktionary records an etymology (385 of the 2,241 — `cast pearls before swine` gets Matthew 7:6). |
+
+Three things decide what a reader actually meets:
+
+- **Which sense is the idiom.** `senseIndex` is not always 0. "peanut butter"
+  is an idiom for spreading resources too thin and its first sense is the
+  spread; a card showing sense 0 would teach nothing. The idiomatic sense is
+  matched back to our entry by its gloss, and an idiom whose idiomatic sense
+  did not survive step 3's cut is dropped — we have no Hindi for it.
+- **What counts as an idiom.** Phrasal verbs are left out (the word screen
+  already lists them under their headword), as are phrases built only from
+  function words ("at all", "about to"), idiomatic adverbs and conjunctions
+  ("at first", "so long as"), and anything tagged vulgar, offensive,
+  euphemistic or neologism — "special military operation" is tagged
+  euphemistic, and is a state's name for an invasion, not an idiom.
+- **What comes first.** Two signals, because each alone gets it wrong.
+
+  `weight` — how many languages Wiktionary's editors translated the phrase
+  into — orders the list. A phrase has no frequency rank of its own, and
+  `freqRank` is the rank of its *rarest word*, so ordering by it opens a list
+  of two thousand with collocations: "keep good time" and "red face test"
+  above "spill the beans", which is built from rarer words. freqRank only
+  breaks ties now.
+
+  `idiomaticity()` then acts as a floor, not an order: it counts the
+  meaning-carrying words a phrase uses, and a phrase with fewer than two
+  ("at first", "by the way", "on purpose") is a construction rather than
+  something to learn, so it is left out of the day's draw and sorted to the
+  back of the browse list. Repeats count — "eye for an eye" and "neck and
+  neck" are idioms, and an earlier version that counted only *different*
+  words rejected them.
+
+  Ordering by idiomaticity itself was the first attempt and does not scale: it
+  counts words, so over two thousand phrases it simply sorts the longest to
+  the top. At 241 idioms the day's pool was 17% of the list and the bias did
+  not show; at 2,241 it is under 2%.
+
+  The day's ten are drawn from the best known unseen and then shuffled by the
+  day's seed, so a reader meets good idioms on day one and a different ten
+  tomorrow.
+
+**Finding them while reading.** An idiom in a browse list is one a reader
+has to go looking for; the point is to meet it in the book. Two things were in
+the way, and both are fixed in `phrase_windows.dart` (mirrored in
+`api/src/services/phrases.ts`):
+
+- The matcher built windows of **two to four tokens**, enough for the 3,000
+  phrases the dictionary shipped with. "hit the nail on the head" is six and
+  "let the cat out of the bag" is seven, so a reader tapping inside either got
+  the entry for `nail` or `cat`. `kMaxPhraseTokens` is now 9, which reaches all
+  but four of the idioms we hold.
+- **1,182 idioms have a slot** — "change one's mind", "serve someone right" —
+  and never appear literally, so no window could ever match them at any cap.
+  `patternMatches` treats the slot tokens as wildcards. A bare `one` is not a
+  slot: in "kill two birds with one stone" it is a numeral.
+
+Both cost one query per tap rather than one per window: 44 windows is 44 round
+trips, so `phraseCandidates` fetches every phrase that could match any of them
+at once, by first token.
+
+**Phrasal verbs** ride on the same rows, marked `kind: "phrasal"` — 113 of
+them, the ones already in the dictionary with a Hindi meaning. They are taught
+the same way, share the screen, and the browse list filters between them. They
+are exempt from the idiomaticity floor: "give up" scores 1 because `up` is a
+function word, which is exactly the shape the floor rejects, and a phrasal verb
+is not grammar. Step 11 still refuses them, because it chooses what to *pay a
+model to write* and a phrasal verb there is a whole new entry — about 837 are
+available if you want them.
+
+**One a day.** `daily_idiom_reminder.dart` plans a fortnight of notifications
+from the idioms already on the phone, at the hour in settings, each one that
+day's first card so the notification and the Today's 10 screen agree. A
+fortnight, because iOS caps an app at 64 pending notifications and the card
+reminders want their share. No account, server or connection.
+
+Seed and storage: `idioms` is a Mongo collection and a seed line type
+(`{"t":"idiom",…}`), so idioms arrive with the dictionary and work offline.
+An app older than this feature skips the unknown line. Progress (saved, seen,
+right, wrong) lives in `idiom_progress` on the phone and is never touched by a
+seed. Schema v12 — v11 is the same without `weight`, and a phone upgrading
+from it weighs every idiom 0 until the next seed arrives.
+
+```sh
+cd pipeline
+.venv/bin/python 09_idioms.py --extract data/extract-full.json
+.venv/bin/python 10_load_idioms.py
+```
+
+### More idioms
+
+The 3,000-phrase cap in `02_select.py` predates this feature, and only ~240 of
+those phrases survive the rules above. Wiktionary attests about **9,400**
+multi-word entries with an `idiomatic` sense that the dictionary does not
+carry, and **6,996** of them are usable. `11_more_idioms.py` writes them in
+the shape step 4 generates from, ranked by `phrase_weight` — the
+translation-count signal 02_select already uses, so "thick as thieves" is
+ranked above "Roma locuta est". Only phrases step 9 would go on to accept are
+selected, so nothing is generated that the feature then discards.
+
+Two of its rules had to be loosened to get there, because reusing the
+dictionary's own phrase rules on idioms threw away the best-known idioms in
+English:
+
+- **`idiom_phrase_ok` replaces `02_select.phrase_ok`.** That function guards
+  the *in-text phrase matcher*: it caps a phrase at four tokens and rejects
+  one containing a placeholder (`one's`, `someone`), because the reader matches
+  phrases literally in running text and "someone's" never appears there. On
+  idioms it rejected 3,386 entries — 1,364 for a placeholder (`pull the wool
+  over someone's eyes`, `hold one's horses`), 757 for length (`let the cat out
+  of the bag`, `hit the nail on the head`, `at the drop of a hat`), and 980
+  for `has_usable_sense(strict=True)`, which excludes a phrase whose senses are
+  all "restricted" — but an idiom is *usually* informal or slang (`get a move
+  on`, `in the buff`). `idiomatic_senses()` is the stronger test and is applied
+  anyway. Nothing downstream minds: `phrase_windows` only ever builds windows
+  of two to four tokens, so a longer or placeholder phrase is never looked up
+  in running text. It sits inert in `phrases` and still appears on its words'
+  screens, which is where a reader meets it.
+- **`--include-unranked` keeps a phrase built on a word the dictionary lacks**,
+  ranking it from the words that do resolve. A phrase inherits the frequency
+  rank of its rarest word, and 1,526 idioms contain a possessive (`devil's`,
+  `sheep's`) or a word outside the top-20k slice (`eggshells`, `hooky`,
+  `haystack`) — so `wolf in sheep's clothing`, `tit for tat`, `child's play`
+  and `needle in a haystack` were all dropped for want of a rank. Treating the
+  unknown word as "rarer than everything" instead parks the phrase at the end
+  of the dictionary, outside the seed slice, and the app's idiom list
+  inner-joins `entries` — so it would load into Mongo and never reach a phone.
+
+Capitalised phrases (`go Dutch`, `Dutch courage`, `Jane Doe` — 324 of them)
+stay out: 05_load keys a phrase entry `normalize_sentence(word).lower()` while
+step 9 keys an idiom by the extract's own spelling, so the two would not meet,
+and lowercasing `go dutch` on a card is wrong.
+
+**The seed slice.** `SEED_LIMIT` is a count, not a rank — the 20,000
+*lowest-ranked* entries — so adding 6,996 entries pushes 6,000-odd dictionary
+words out of it. At 20,000 the slice would end at rank 15,763 instead of
+26,728, leaving 9,391 words (up from 3,001) and 606 idioms off-device. Those
+words still work through on-demand `/lookup`, but not offline, and an idiom
+whose entry is off-device never appears at all. **27,000** restores today's
+coverage; **30,000** ships the whole dictionary. The cost is a few MB on a
+seed download — an idiom entry is ~0.2 KB gzipped and a common-word entry
+~0.7 KB.
+
+Measured on a live probe: **$0.49 per 1,000 entries** at live rates, and
+**$0.25 per 1,000** in batch. The first 2,000 cost **$0.51** — 6.1M input
+tokens, 678k output, 3,082 senses, 2,000 of 2,000 returned and 3 retried live
+for a stray English word in a Hindi field. All 6,996 cost about **$1.75**.
+
+`batch-fetch` takes its input and output paths from the batch state file, so
+it reads back the extract the batch was built from rather than whatever `--in`
+defaults to; pass `--out` only to override what `batch-submit` recorded.
+
+```sh
+.venv/bin/python 11_more_idioms.py --n 100000 --include-unranked
+.venv/bin/python 04_generate.py --mode batch-submit --in data/idioms-extract.json --name idioms
+.venv/bin/python 04_generate.py --mode batch-status --name idioms
+.venv/bin/python 04_generate.py --mode batch-fetch  --name idioms
+.venv/bin/python 05_load.py --in data/idioms-generated.jsonl --extract data/idioms-extract.json
+.venv/bin/python 09_idioms.py --extract data/extract-full.json data/idioms-extract.json
+.venv/bin/python 10_load_idioms.py
+```
+
+Idiom entries are extracted with `plain_examples_only`, which drops
+Wiktionary's citations instead of falling back to them. A citation is a line
+lifted out of a book or a song — *"Too many joy rides in daddy's Jaguar / Too
+many white lies"* — and on an idiom card the example **is** the lesson, so a
+riddle is worse than nothing. Given no example the entry prompt writes a plain
+one itself: *"She told a white lie to avoid hurting his feelings."* Of the
+2,000 selected, 972 senses had a real usage example and 1,458 get a written
+one. The dictionary's own extraction is unchanged — it keeps citations, which
+is right for a word a reader met in a 19th-century novel.
+
+Some citations carry their source *inside* the example text, so Wiktionary
+never tagged them a quotation and the plain-only path let them through:
+*"Only force of habit will explain why people today do honor to Christopher
+Columbus." - New York Times, 1937*. `example_teaches()` drops those, and drops
+a sentence that explains the phrase rather than using it (*To "walk the
+straight and narrow" means to live a moral life*) — but only when the quoted
+span is the headword, since *Do you have any idea what "tergiversate" means?
+Beats me!* is a real use of "beats me". Three of 1,364 examples were
+affected.
+
+**`--extract` must name the extract the live `entries` were generated from.**
+`senseIndex` is a position in that extract's sense ordering, and the orderings
+differ between extracts — a different cap or a changed `RANK_PENALTY` reshuffles
+them. Building the file from `extract-new.json` while Mongo still held entries
+from `extract-full.json` pointed `cold turkey` at "the physiological effects of
+such a withdrawal" instead of the withdrawal itself. So **re-run both steps after
+any dictionary regeneration**, against the extract that produced it. The loader
+skips a row whose index is past the end of its entry, and `IdiomRow.sense` falls
+back to the first sense, so a mismatch is wrong rather than fatal — but it is
+still wrong.
+
+## Searching in Hindi
+
+The dictionary only ever ran one way: `searchWords` is `word LIKE 'prefix%'`,
+so a reader who knew *खुशामद* but not *curry favor* could not find it. The
+meanings live inside each entry's JSON and `LIKE '%…%'` over 23,000 JSON blobs
+is not a search, so `meaning_terms` indexes them: the short `meaning` of each
+of an entry's first `kIndexedSenses` senses, split on spaces, the danda and the
+punctuation glosses are written with. Not `definition`, which is a sentence and
+would make every entry answer to "करना".
+
+Typing Devanagari in the dictionary's search field searches that index
+instead, commonest word first. The index is built from the entries already on
+the phone when it upgrades, so nobody downloads 70 MB again: 23,000 entries
+take about a second on a laptop, once.
+
+## Tools: producing English, not only taking it in
+
+Everything else in Arth is receptive — a book goes in, meanings come out. The
+Tools section goes the other way, which is the half of a language a
+reader-only app never reaches. They are reached from the dictionary tab,
+where a reader already comes to look something up.
+
+| | |
+|---|---|
+| **Translator** (`/tools/translate`, `POST /v1/english`) | Hindi in, natural English out — the reverse of `/translate`, for somebody who knows their meaning exactly and is missing only the words. Carries the vocabulary worth keeping and the same thing said formally, casually and directly, because the first English a learner is handed is rarely the one their situation wants. |
+| **Spell check** (`/tools/spell`, `POST /v1/proofread`) | The reader's own English, corrected. Every fix quotes the words it replaces, so the editor underlines each one *where it happened* rather than listing them below — a correction you have to hunt for in your own text teaches nothing — and says why in Hindi. A fix whose `wrong` is not found in the text is dropped server-side, because it would underline nothing. |
+| **Say It Right** (`/tools/say`) | Hear a word, say it back, see how close you got. No server: recognition is the phone's own (`speech_to_text`), so it costs nothing to run and works without an account. |
+
+**What Say It Right actually measures.** A recogniser reports *words*, not
+sounds. So the score can tell a reader that "thought" came out as "taught" —
+which is exactly the mistake worth catching — but it cannot hear a thickened
+vowel in a word it got right. `pronunciationScore` is edit distance over the
+letters, with spaces dropped so a word the recogniser splits in two ("a bout"
+for "about") still counts as one attempt. Three bands: clear, nearly, not yet.
+The words come from the reader's own saved vocabulary where there are enough
+of them, and the commonest part of the dictionary otherwise.
+
+Permissions: `RECORD_AUDIO` and a `RecognitionService` query on Android
+(without the query, Android 11+ reports no recogniser at all), and the two
+usage strings on iOS.
+
+## Speaking practice
+
+`/tools/coach` — a short role-play the learner talks their way through, with
+their own sentences put right as they go. Four scenes: a job interview, buying
+something, the doctor, meeting someone.
+
+**The phone does the listening and the speaking.** Its own recogniser, its own
+synthesizer; all that crosses the wire is text. That is the whole reason this
+is affordable — a measured four-turn interview was 4,118 input and 821 output
+tokens on `gpt-5.6-luna`, about **₹0.08**, and a ten-turn conversation works
+out near **₹0.28**. Speech-to-speech over the Realtime API would be audio
+tokens for the whole call, which does not fit a ₹500-a-year subscription.
+
+The cost of doing it this way is latency: the recogniser needs a pause to
+finalise and the model needs a second to answer, so a turn is two to four
+seconds. It is press-to-talk and says so, rather than pretending to be a call
+that keeps stalling.
+
+**What the recogniser heard is always shown before it is sent, and can be
+edited.** On-device recognition of Indian-accented English mishears often
+enough that a coach correcting a sentence the learner never said would be
+worse than no coach — so nothing reaches the model until the learner has seen
+it. That is the `checking` stage in `coach_session.dart`.
+
+`POST /v1/coach` takes the scene, the conversation so far and the latest
+sentence, and returns the next line (English and Hindi) plus `better` when the
+learner's sentence needed it — which the prompt is told to leave out most of
+the time, because a learner corrected on every turn stops speaking. The
+history is replayed to the model as a real conversation rather than summarised
+into the prompt: a coach that forgets its own last question ends the illusion.
+A scene's opening line is fixed and cached, so it is paid for once, ever.
+
+### The schema the model is given is not the contract
+
+OpenAI's strict mode **refuses a schema with an optional property**, so
+`schemaForModel` lists every property as required and makes the ones our
+contract leaves optional nullable instead. Without it the call is rejected
+outright — and a test against a fake provider never notices, which is how
+both `/summary` and `/coach` were written broken and only found by calling the
+real API. Our own Ajv validation still treats them as optional; the contract
+is the truth and the transform is a concession to one API.
+
+## Asking about a sentence, and about a page
+
+Two endpoints for the wall a reader hits once the words have stopped being the
+problem. Both are one validated JSON object cached forever by content hash —
+`/translate` streams because a sentence's Hindi is wanted word by word, while
+these are read whole.
+
+| | |
+|---|---|
+| `POST /v1/grammar` | **How this sentence works**, in Hindi: its one-line shape, then the two or three things worth noticing, each tied to the exact words it is about. The translation beside it says what the sentence means; this says why "had been", what "that" points at, where the verb sits. On the selection tooltip, beside *Make card*. |
+| `POST /v1/summary` | **What happened here** — the page told back in plain Hindi, as a paragraph, the beats in order, and who appears, because a reader coming back after a week has lost the names. In the reader's ⋮ menu. Bounded at 200–20,000 characters so one tap cannot cost a fortune. |
+
+Both sit behind the same AI gate and spend as `/translate` and `/context`.
+
 ## Flashcards, bookmarks, progress
 
 Cards are made while reading — *Make card* on the word card (word + its meaning in this
@@ -234,6 +628,62 @@ runs first where the law requires it; content is capped at PG. Without configura
   `ios/Flutter/Firebase.xcconfig` (overrides the test id in `AdMob.xcconfig`).
 - Play Console: declare that the app contains ads; App Store: the privacy label.
 
+## Discount codes
+
+A coupon never sets a price. Google Play and the App Store own prices, and a server that
+handed out its own would be selling outside the store. What a coupon does is **point at a
+cheaper offer the stores already hold** and decide who may buy at it — so the reader still
+sees a real store price in their own currency, and the purchase is an ordinary store purchase
+that RevenueCat and the existing webhook already understand.
+
+Redeeming is two steps, and the split is the point:
+
+| | |
+|---|---|
+| `POST /v1/coupons/check` | The reader typed a code. Is it good for them, and which offer does it unlock? **Spends nothing** — a reader who checks a code and then changes their mind has not used it up. |
+| `POST /v1/coupons/claim` | The store took the money. Only now is the redemption counted, keyed `code:uid`, so a retry is free. |
+
+Both need sign-in: a coupon belongs to a reader, not a phone. The code is upper-cased and
+stripped of everything but letters and digits, so `mayur 40`, `Mayur-40` and `MAYUR40` are one
+code — typing a coupon off a WhatsApp message should not fail on a space.
+
+Create the store offer **first**, then point a code at it:
+
+1. **Google Play** → Subscriptions → the product → its base plan → *Add offer*. Give the offer
+   a tag (e.g. `pro_yearly_40off`) and set eligibility to *Developer determined*. The app finds
+   the `SubscriptionOption` carrying that tag and buys it.
+2. **App Store Connect** → the subscription → *Subscription Prices* → *Promotional Offers*.
+   Note the offer's identifier. RevenueCat signs it (`Purchases.getPromotionalOffer`) just
+   before the purchase, so the subscription key must be uploaded to RevenueCat.
+3. Point a code at them:
+
+```sh
+cd api
+npm run coupon -- create MAYUR40 --tier pro --period yearly \
+  --android pro_yearly_40off --ios pro_yearly_40off \
+  --label "40% off the first year" --label-hi "पहले साल 40% छूट" \
+  --max 1 --days 30 --for +919425610527 --note "asked for 500-700/yr on WhatsApp"
+
+npm run coupon -- list
+npm run coupon -- show MAYUR40      # with who used it, and when
+npm run coupon -- off MAYUR40       # stop it working, keep the record
+```
+
+`--for` locks the code to one reader (uid, email or phone — they must have signed in once);
+repeat it for a few. `--max` caps total uses, `--days` ends it, and one reader can use a code
+once however many times they tap. Both routes sit behind the per-device limit
+(`RATE_LIMIT_LOOKUPS`, 60/minute), so make codes long enough that guessing at that rate is
+hopeless — `MAYUR40` is fine, `X1` is not.
+
+In the app, **Plans → "Have a discount code?"** stays a quiet link until tapped, so a reader
+with no code is never nudged to go hunting for one. An accepted code becomes a chip, the plan
+it applies to shows the store's offer price with the old price struck through, and the period
+switch jumps to the one the code is for. A code the API accepts but whose offer the store has
+not published yet says so plainly rather than failing. `Plan Purchase` analytics carries
+`coupon: true/false`.
+
+Collections: `coupons` (`_id` = the code), `couponRedemptions` (`_id` = `code:uid`).
+
 ## Analytics
 
 Mixpanel (`app/lib/data/analytics.dart`). Never book titles, words or sentences. Events:
@@ -247,7 +697,7 @@ Mixpanel (`app/lib/data/analytics.dart`). Never book titles, words or sentences.
 | `AI Blocked` | `kind`, `reason` (UNAUTHORIZED, QUOTA_EXCEEDED, QUOTA_PHONE) |
 | `Card Created` | `kind`, `from_book` |
 | `Deck Saved` | `cards` |
-| `Plan Purchase` | `plan`, `yearly`, `outcome` |
+| `Plan Purchase` | `plan`, `yearly`, `outcome`, `coupon` |
 
 Every event carries `plan` and `language`. Signed-in readers are identified by Firebase uid.
 Readers can opt out in Settings → Share usage stats. The project token is built in; debug builds

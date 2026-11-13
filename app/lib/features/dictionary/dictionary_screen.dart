@@ -10,7 +10,9 @@ import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/dictionary_repo.dart';
+import 'package:arth/features/cards/card_face.dart' show isHindiText;
 import 'package:arth/features/dictionary/entry_widgets.dart';
+import 'package:arth/features/idioms/idioms_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -50,6 +52,9 @@ class _DictionaryScreenState extends ConsumerState<DictionaryScreen> {
   /// The dropdown under the search field: recent lookups that fit, words that
   /// start with what's typed (commonest first), and when those run short,
   /// close spellings. Each with its first Hindi meaning.
+  ///
+  /// Typing in Hindi searches the other way round — the meaning, for a reader
+  /// who knows what they want to say but not the English word for it.
   Future<List<_Suggestion>> _suggestionsFor(String typed) async {
     final q = typed.trim().toLowerCase();
     if (q.isEmpty) {
@@ -57,6 +62,14 @@ class _DictionaryScreenState extends ConsumerState<DictionaryScreen> {
       return const [];
     }
     final store = ref.read(localStoreProvider);
+    if (isHindiText(q)) {
+      final words = await store.searchMeanings(q);
+      _setNoMatches(words.isEmpty);
+      return Future.wait([
+        for (final w in words)
+          store.entry(w).then((e) => (word: w, meaning: e?.senses.firstOrNull?.meaning, kind: _SuggestionKind.meaning)),
+      ]);
+    }
     final recent = [
       for (final w in ref.read(recentLookupsProvider).valueOrNull ?? const <String>[])
         if (w.toLowerCase().startsWith(q)) w,
@@ -222,6 +235,8 @@ class _DictionaryScreenState extends ConsumerState<DictionaryScreen> {
                 SectionLabel(t.recent),
                 for (final w in recent) _WordRow(word: w, onTap: () => _open(w), onLongPress: () => _forgetRecent(w)),
               ],
+              const _ToolsRow(),
+              const IdiomsCard(),
               if (wotd != null) ...[
                 SectionLabel(t.wordOfTheDay),
                 Pressable.card(
@@ -278,7 +293,7 @@ class _WordRow extends StatelessWidget {
   }
 }
 
-enum _SuggestionKind { recent, match, didYouMean }
+enum _SuggestionKind { recent, match, meaning, didYouMean }
 
 typedef _Suggestion = ({String word, String? meaning, _SuggestionKind kind});
 
@@ -314,7 +329,9 @@ class _SuggestionList extends ConsumerWidget {
               itemCount: options.length,
               itemBuilder: (_, i) {
                 final o = options[i];
-                final starts = o.word.toLowerCase().startsWith(query) && o.kind != _SuggestionKind.didYouMean;
+                final starts = o.word.toLowerCase().startsWith(query) &&
+                    o.kind != _SuggestionKind.didYouMean &&
+                    o.kind != _SuggestionKind.meaning;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -334,6 +351,7 @@ class _SuggestionList extends ConsumerWidget {
                               switch (o.kind) {
                                 _SuggestionKind.recent => Icons.history_rounded,
                                 _SuggestionKind.match => Icons.search_rounded,
+                                _SuggestionKind.meaning => Icons.translate_rounded,
                                 _SuggestionKind.didYouMean => Icons.spellcheck_rounded,
                               },
                               size: 18,
@@ -373,6 +391,76 @@ class _SuggestionList extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Shortcuts into the tools. They sit on the dictionary tab because that is
+/// where a reader already comes to look something up; the difference is that
+/// these go the other way — out of the reader and into English.
+class _ToolsRow extends ConsumerWidget {
+  const _ToolsRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final t = ref.watch(stringsProvider);
+    final scale = ref.watch(settingsProvider).hindiScale;
+
+    Widget tool(IconData icon, String label, Color tint, String route) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Pressable.card(
+              depth: 3,
+              onTap: () => context.push(route),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+                child: Column(
+                  children: [
+                    Icon(icon, color: tint, size: 24),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: uiLabel(hindi: t.isHindi, color: c.ink, scale: scale),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The label opens the hub: four tools do not fit across a phone, so
+        // the row shows three and the fourth lives one tap away.
+        Row(
+          children: [
+            SectionLabel(t.toolsTitle),
+            const Spacer(),
+            TextButton(
+              onPressed: () => context.push('/tools'),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              child: Text(t.seeAll, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: scale)),
+            ),
+          ],
+        ),
+        // IntrinsicHeight, because stretch inside a ListView asks the row for
+        // infinite height; the three cards still end up the same height as
+        // each other, which is the point of stretching them.
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              tool(Icons.translate_rounded, t.translatorTitle, c.accent, '/tools/translate'),
+              tool(Icons.spellcheck_rounded, t.spellCheckTitle, c.marigold, '/tools/spell'),
+              tool(Icons.record_voice_over_rounded, t.coachTitle, c.ink, '/tools/coach'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Page-turn haptics (MainActivity.kt). -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Say It Right listens to the reader and scores what it heard. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:usesCleartextTraffic="true"
         android:label="Arth"
@@ -63,6 +65,13 @@
             </intent-filter>
         </receiver>
     </application>
+    <queries>
+        <!-- Android 11+ hides other packages; without this the phone
+             reports no speech recogniser at all. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.

@@ -17,7 +17,19 @@ SCHEMAS = APP.parent / "contracts" / "schemas"
 OUT = APP / "lib" / "core" / "models" / "contracts.dart"
 
 # Wire/storage types the app uses. entry-generation.json is the pipeline's LLM schema.
-INCLUDE = ["dictionary-entry", "context-result", "translation-result", "phrase-match", "api-error"]
+INCLUDE = [
+    "dictionary-entry",
+    "context-result",
+    "translation-result",
+    "phrase-match",
+    "related-phrase",
+    "grammar-note",
+    "passage-summary",
+    "english-draft",
+    "proofread",
+    "coach-turn",
+    "api-error",
+]
 # Dart-side names where the schema title would collide with Flutter's own classes.
 RENAME = {"Form": "WordForm"}
 

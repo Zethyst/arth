@@ -14,6 +14,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/data/account.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/billing.dart';
+import 'package:arth/data/coupon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -60,6 +61,12 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
   bool _yearly = true;
   bool _busy = false;
 
+  /// The accepted discount code, and the store prices it unlocked. Both are
+  /// empty until a code is accepted; a code the stores hold no offer for
+  /// gives an accepted coupon and no prices, which the field says plainly.
+  CouponOffer? _coupon;
+  List<PlanOffer> _couponOffers = const [];
+
   void _snack(String text) => ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
 
   /// After the store says yes: the API applies the plan now (the webhook
@@ -73,6 +80,41 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
     ref.invalidate(accountProvider);
   }
 
+  /// Checks a code with the API and, if it is good, asks the stores what the
+  /// offer it names costs. Nothing is spent here: the code is only counted
+  /// after a purchase goes through.
+  Future<String?> _applyCoupon(String code) async {
+    final t = ref.read(stringsProvider);
+    if (ref.read(signedInUidProvider) == null) {
+      // Same answer the Buy button gives: the code belongs to an account, so
+      // send them to sign in rather than explain it in the field's error slot.
+      _snack(t.signInToBuy);
+      unawaited(context.push('/signin'));
+      return null;
+    }
+    final CouponOffer coupon;
+    try {
+      coupon = await ref.read(apiClientProvider).checkCoupon(code);
+    } on ApiFailure catch (e) {
+      return e.message;
+    }
+    final base = ref.read(planOffersProvider).valueOrNull ?? const <PlanOffer>[];
+    final priced = ref.read(billingProvider).couponOffers(base, coupon);
+    if (!mounted) return null;
+    setState(() {
+      _coupon = coupon;
+      _couponOffers = priced;
+      // Jump to the period the code is for, so its price is the one on screen.
+      if (coupon.period != null) _yearly = coupon.period == CouponPeriod.yearly;
+    });
+    return priced.isEmpty ? t.couponNoOffer : null;
+  }
+
+  void _clearCoupon() => setState(() {
+        _coupon = null;
+        _couponOffers = const [];
+      });
+
   Future<void> _buy(PlanOffer offer, String planName) async {
     final t = ref.read(stringsProvider);
     if (ref.read(signedInUidProvider) == null) {
@@ -82,9 +124,19 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
     }
     setState(() => _busy = true);
     final outcome = await ref.read(billingProvider).buy(offer);
-    ref.read(analyticsProvider).track('Plan Purchase', {'plan': offer.tier.name, 'yearly': offer.yearly, 'outcome': outcome.name});
+    ref.read(analyticsProvider).track('Plan Purchase', {'plan': offer.tier.name, 'yearly': offer.yearly, 'outcome': outcome.name, 'coupon': offer.coupon != null});
     if (outcome == BuyOutcome.bought) {
       unawaited(Haptics.finish());
+      // Count the code only now, against the purchase that used it. Failing
+      // here costs the reader nothing — they have already bought the plan.
+      final code = offer.coupon?.code;
+      if (code != null) {
+        try {
+          await ref.read(apiClientProvider).claimCoupon(code);
+        } on ApiFailure catch (e) {
+          debugPrint('coupon claim: $e');
+        }
+      }
       await _applyPurchase();
       if (mounted) _snack(t.welcomeTo(planName));
     } else if (outcome == BuyOutcome.failed && mounted) {
@@ -146,20 +198,26 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
             : Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => unawaited(_request(tier, account)), child: Text(t.requestUpgrade)));
       }
       if (offers.isLoading) return const Padding(padding: EdgeInsets.all(8), child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))));
-      final o = list?.where((o) => o.tier == tier && o.yearly == _yearly).firstOrNull;
+      bool here(PlanOffer o) => o.tier == tier && o.yearly == _yearly;
+      // An accepted code replaces the plain price with the store's offer price.
+      final o = _couponOffers.where(here).firstOrNull ?? list?.where(here).firstOrNull;
       if (o == null) return Text(t.plansUnavailable, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13.5));
       final monthlyEquivalent = o.yearly ? approxMoney(o.price / 12, o.currencyCode) : null;
       final trial = o.freeTrialDays;
+      final couponNote = o.coupon?.labelFor(hindi: t.isHindi);
       return _Price(
         offer: o,
         headline: o.yearly ? t.perYear(o.priceString) : t.perMonth(o.priceString),
-        note: o.introPriceString != null && o.introMonths != null
-            ? t.introOffer(o.introPriceString!, o.introMonths!, o.priceString)
-            : monthlyEquivalent == null
-                ? null
-                : t.aboutPerMonth(monthlyEquivalent),
-        badge: trial == null ? null : t.daysFree(trial),
-        button: trial == null ? t.subscribeTo(name) : t.startTrial(trial),
+        strikethrough: o.fullPriceString,
+        note: couponNote != null && couponNote.isNotEmpty
+            ? couponNote
+            : o.introPriceString != null && o.introMonths != null
+                ? t.introOffer(o.introPriceString!, o.introMonths!, o.priceString)
+                : monthlyEquivalent == null
+                    ? null
+                    : t.aboutPerMonth(monthlyEquivalent),
+        badge: o.discounted ? t.couponApplied : (trial == null ? null : t.daysFree(trial)),
+        button: trial == null || o.discounted ? t.subscribeTo(name) : t.startTrial(trial),
         onBuy: _busy ? null : () => unawaited(_buy(o, name)),
       );
     }
@@ -177,6 +235,8 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           const SizedBox(height: 22),
           if (billing.available) ...[
             _PeriodSwitch(yearly: _yearly, saving: saving, onChanged: (v) => setState(() => _yearly = v)),
+            const SizedBox(height: 16),
+            _CouponField(coupon: _coupon, onApply: _applyCoupon, onClear: _clearCoupon),
             const SizedBox(height: 16),
           ],
           for (final (tier, name, ai, ads, ink) in [
@@ -273,10 +333,13 @@ class _PeriodSwitch extends ConsumerWidget {
 
 /// A paid plan's price, its offer, and the button.
 class _Price extends ConsumerWidget {
-  const _Price({required this.offer, required this.headline, required this.button, required this.onBuy, this.note, this.badge});
+  const _Price({required this.offer, required this.headline, required this.button, required this.onBuy, this.note, this.badge, this.strikethrough});
 
   final PlanOffer offer;
   final String headline;
+
+  /// The undiscounted price, shown struck through beside a coupon price.
+  final String? strikethrough;
   final String? note;
   final String? badge;
   final String button;
@@ -295,6 +358,13 @@ class _Price extends ConsumerWidget {
           Row(
             children: [
               Flexible(child: Text(headline, style: EnglishText.heading(c.ink, size: 19))),
+              if (strikethrough != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  strikethrough!,
+                  style: EnglishText.body(c.inkMuted).copyWith(decoration: TextDecoration.lineThrough),
+                ),
+              ],
               if (badge != null) ...[
                 const SizedBox(width: 10),
                 Container(
@@ -433,5 +503,145 @@ class LegalLinks extends ConsumerWidget {
           child: Text(label, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: scale).copyWith(fontSize: 13)),
         );
     return Wrap(alignment: WrapAlignment.center, spacing: 4, children: [link(t.termsOfUse, 'terms'), link(t.privacyPolicy, 'privacy')]);
+  }
+}
+
+/// "Have a discount code?" — collapsed to a link until the reader taps it, so
+/// a reader who has no code is never nudged to go looking for one. An
+/// accepted code shows as a chip they can remove.
+class _CouponField extends ConsumerStatefulWidget {
+  const _CouponField({required this.coupon, required this.onApply, required this.onClear});
+
+  final CouponOffer? coupon;
+
+  /// Returns null when the code was accepted, or the line to show when it
+  /// was not.
+  final Future<String?> Function(String code) onApply;
+  final VoidCallback onClear;
+
+  @override
+  ConsumerState<_CouponField> createState() => _CouponFieldState();
+}
+
+class _CouponFieldState extends ConsumerState<_CouponField> {
+  final _controller = TextEditingController();
+  bool _open = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _controller.text.trim();
+    if (code.isEmpty || _busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final error = await widget.onApply(code);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+      if (error == null) _open = false;
+    });
+    if (error == null) unawaited(Haptics.finish());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = ref.watch(stringsProvider);
+    final scale = ref.watch(settingsProvider).hindiScale;
+    final coupon = widget.coupon;
+
+    if (coupon != null) {
+      final label = coupon.labelFor(hindi: t.isHindi);
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+        decoration: BoxDecoration(color: c.marigold.withValues(alpha: 0.15), border: Border.all(color: c.ink, width: 2)),
+        child: Row(
+          children: [
+            Icon(Icons.local_offer_outlined, size: 18, color: c.ink),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(coupon.code, style: EnglishText.label(c.ink, size: 14)),
+                  if (label.isNotEmpty)
+                    Text(label, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13)),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: t.couponRemove,
+              icon: Icon(Icons.close_rounded, color: c.inkMuted),
+              onPressed: () {
+                _controller.clear();
+                setState(() => _error = null);
+                widget.onClear();
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_open) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          onPressed: () => setState(() => _open = true),
+          style: TextButton.styleFrom(foregroundColor: c.accent, visualDensity: VisualDensity.compact),
+          child: Text(t.haveCoupon, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: scale).copyWith(fontSize: 13.5)),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                enabled: !_busy,
+                textCapitalization: TextCapitalization.characters,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => unawaited(_submit()),
+                style: EnglishText.body(c.ink, size: 16),
+                decoration: InputDecoration(
+                  isDense: true,
+                  labelText: t.couponCode,
+                  errorText: _error,
+                  // The API answers in whole Hindi sentences; the default
+                  // single line cuts them off mid-word.
+                  errorMaxLines: 3,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: FilledButton(
+                onPressed: _busy ? null : () => unawaited(_submit()),
+                child: _busy
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(t.couponApply),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }

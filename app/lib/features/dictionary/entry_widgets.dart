@@ -224,7 +224,18 @@ class InContextBlock extends ConsumerWidget {
   }
 }
 
+/// When a flat list of senses stops being readable and wants part-of-speech
+/// headings instead. A word like "get" now carries up to 25 senses; eight was
+/// a list, twenty-five is a wall.
+const int kGroupSensesAbove = 8;
+
 /// Numbered senses. [max] limits the list for the compact tooltip.
+///
+/// Past [kGroupSensesAbove] senses spanning more than one part of speech, and
+/// only in the full list, they are grouped under संज्ञा / क्रिया / विशेषण
+/// headings. Numbering stays the sense's own `index`, which is what /context
+/// and saved cards refer to, so a grouped list and a flat one name the same
+/// sense by the same number.
 class SenseList extends ConsumerWidget {
   const SenseList({
     required this.senses,
@@ -253,10 +264,32 @@ class SenseList extends ConsumerWidget {
       ordered = [p, ...ordered];
     }
     final shown = max == null ? ordered : ordered.take(max!).toList();
+    // Grouping would fight the pinned sense, which is deliberately lifted out
+    // of its place to the top, so the two never apply at once.
+    final grouped = max == null &&
+        pinnedIndex == null &&
+        shown.length > kGroupSensesAbove &&
+        shown.map((s) => s.partOfSpeech).toSet().length > 1;
+    // A heading before each run of senses sharing a part of speech. Computed
+    // up front rather than tracked while building, so the list stays a
+    // plain description of what to draw.
+    final heading = <int, String>{};
+    if (grouped) {
+      String? last;
+      for (final s in shown) {
+        if (s.partOfSpeech != last) heading[s.index] = s.partOfSpeech;
+        last = s.partOfSpeech;
+      }
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final s in shown) ...[
+          if (heading[s.index] case final pos?)
+            Padding(
+              padding: EdgeInsets.only(top: identical(s, shown.first) ? 4 : 18, bottom: 2),
+              child: Text(pos, style: h.meaning(c.accent)),
+            ),
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Row(
@@ -274,11 +307,19 @@ class SenseList extends ConsumerWidget {
                       style: h.meaning(c.ink),
                       children: [
                         TextSpan(text: s.meaning),
-                        const TextSpan(text: '  '),
-                        TextSpan(
-                          text: s.partOfSpeech,
-                          style: h.small(c.inkMuted),
-                        ),
+                        // Under a part-of-speech heading the tag would just
+                        // repeat it on every line.
+                        if (!grouped) ...[
+                          const TextSpan(text: '  '),
+                          TextSpan(text: s.partOfSpeech, style: h.small(c.inkMuted)),
+                        ],
+                        // Wiktionary's own label: स्लैंग, पुराना, ब्रिटिश…
+                        // Only marked senses carry one, so a plain sense
+                        // reads exactly as it did before.
+                        if ((s.styleLabel ?? '').isNotEmpty) ...[
+                          const TextSpan(text: '  '),
+                          TextSpan(text: s.styleLabel, style: h.small(c.accent)),
+                        ],
                       ],
                     ),
                   ),
@@ -403,6 +444,7 @@ class EntryDetails extends ConsumerWidget {
           SectionLabel(t.antonyms),
           PairWrap(entry.antonyms, onTapWord: onTapWord),
         ],
+        if (!entry.isPhrase) PhrasesOfWord(lemma: entry.word, onTapWord: onTapWord),
         if (entry.forms.isNotEmpty) ...[
           SectionLabel(t.forms),
           Wrap(
@@ -426,6 +468,73 @@ class EntryDetails extends ConsumerWidget {
           t.attribution,
           style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: settings.hindiScale, size: 12.5),
         ),
+      ],
+    );
+  }
+}
+
+/// The idioms and phrasal verbs built on a headword, in two labelled groups
+/// that each open the phrase's own entry. Off-device words fall back to the
+/// API; while nothing has arrived the section simply isn't there, so the rest
+/// of the entry never waits on it.
+class PhrasesOfWord extends ConsumerWidget {
+  const PhrasesOfWord({required this.lemma, super.key, this.onTapWord});
+
+  final String lemma;
+  final ValueChanged<String>? onTapWord;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(phrasesOfWordProvider(lemma)).valueOrNull ?? const <RelatedPhrase>[];
+    if (items.isEmpty) return const SizedBox.shrink();
+    final t = ref.watch(stringsProvider);
+    final phrasal = items.where((p) => p.kind == RelatedPhraseKind.phrasal).toList();
+    final idioms = items.where((p) => p.kind == RelatedPhraseKind.idiom).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (phrasal.isNotEmpty) ...[
+          SectionLabel(t.phrasalVerbs),
+          _PhraseRows(phrasal, onTapWord: onTapWord),
+        ],
+        if (idioms.isNotEmpty) ...[
+          SectionLabel(t.idioms),
+          _PhraseRows(idioms, onTapWord: onTapWord),
+        ],
+      ],
+    );
+  }
+}
+
+class _PhraseRows extends ConsumerWidget {
+  const _PhraseRows(this.items, {this.onTapWord});
+
+  final List<RelatedPhrase> items;
+  final ValueChanged<String>? onTapWord;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.colors;
+    final h = HindiText(ref.watch(settingsProvider).hindiScale);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final p in items)
+          InkWell(
+            onTap: onTapWord == null ? null : () => onTapWord!(p.phrase),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(text: p.phrase, style: EnglishText.body(c.ink, size: 16)),
+                    const TextSpan(text: '  '),
+                    TextSpan(text: p.meaning, style: h.small(c.inkMuted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

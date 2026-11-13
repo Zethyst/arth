@@ -24,6 +24,7 @@ from pathlib import Path
 from wordfreq import top_n_list
 
 from arth_pipeline.config import DATA_DIR, config, read_wordlist
+from arth_pipeline.idioms import phrase_weight
 from arth_pipeline.normalize import normalize_word
 from arth_pipeline.wiktionary import (
     CONTENT_POS,
@@ -52,12 +53,6 @@ def phrase_ok(word: str, entry: dict) -> bool:
     if set(toks) & PLACEHOLDER_TOKENS or len(set(toks)) == 1:
         return False
     return has_usable_sense(entry, strict=True)
-
-
-def phrase_weight(entry: dict) -> int:
-    """Evidence the phrase is common: sense-level translation counts (same signal 03_extract
-    uses to rank senses). 'as well as' scores in the dozens; 'for to' scores 0."""
-    return sum(len(s.get("translations") or ()) for s in entry.get("senses") or ())
 
 
 def scan_wiktionary() -> tuple[set[str], dict[str, str], dict[str, tuple[list[str], int]]]:

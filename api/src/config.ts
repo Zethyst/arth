@@ -10,17 +10,31 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().default(''),
   LLM_CONTEXT_MODEL: z.string().default('gpt-5.6-luna'),
   LLM_TRANSLATE_MODEL: z.string().default('gpt-5.6-luna'),
+  LLM_GRAMMAR_MODEL: z.string().default('gpt-5.6-luna'),
+  LLM_SUMMARY_MODEL: z.string().default('gpt-5.6-luna'),
+  LLM_TOOLS_MODEL: z.string().default('gpt-5.6-luna'),
+  LLM_COACH_MODEL: z.string().default('gpt-5.6-luna'),
   /** Model for the index-only context path (a nano-class model once one is named). */
   LLM_CONTEXT_INDEX_MODEL: z.string().default('gpt-5.6-luna'),
   /** On-demand dictionary entries for staged lemmas (same prompt as the pipeline). */
   LLM_ENTRY_MODEL: z.string().default('gpt-5.6-luna'),
-  LLM_ENTRY_MAX_TOKENS: z.coerce.number().int().default(4000),
+  // An entry may now run to 25 senses (pipeline max_senses_per_entry), and
+  // Devanagari tokenizes 2–3× worse than English: budget ~350 per sense.
+  LLM_ENTRY_MAX_TOKENS: z.coerce.number().int().default(9000),
   /** live: model picks the sense and writes the note. index: model picks the sense; note is pre-written. */
   CONTEXT_MODE: z.enum(['live', 'index']).default('live'),
   LLM_TEMPERATURE: z.coerce.number().optional(),
   // Includes hidden reasoning tokens on the gpt-5.6 family; the visible note is ~100.
   LLM_CONTEXT_MAX_TOKENS: z.coerce.number().int().default(900),
   LLM_TRANSLATE_MAX_TOKENS: z.coerce.number().int().default(1200),
+  LLM_GRAMMAR_MAX_TOKENS: z.coerce.number().int().default(1400),
+  // A summary reads a page or a chapter, so it needs more room than a sentence.
+  LLM_SUMMARY_MAX_TOKENS: z.coerce.number().int().default(2400),
+  LLM_ENGLISH_MAX_TOKENS: z.coerce.number().int().default(1400),
+  LLM_PROOFREAD_MAX_TOKENS: z.coerce.number().int().default(2400),
+  // A turn is two sentences and a correction; the budget is for the
+  // reasoning in front of them, not the answer.
+  LLM_COACH_MAX_TOKENS: z.coerce.number().int().default(1200),
 
   // --- rate limits per device, per minute (Section 6) ---
   RATE_LIMIT_LOOKUPS: z.coerce.number().int().default(60),

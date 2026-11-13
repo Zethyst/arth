@@ -9,6 +9,8 @@ const sense = new Schema(
     partOfSpeech: { type: String, required: true },
     meaning: { type: String, required: true },
     definition: { type: String, required: true },
+    /** Wiktionary's own label in Hindi (स्लैंग, पुराना…). Absent on entries written before style labels. */
+    styleLabel: { type: String, default: '' },
     examples: { type: [pair], default: [] },
   },
   { _id: false },
@@ -63,6 +65,7 @@ export function toDictionaryEntry(doc: EntryDoc): DictionaryEntry {
       partOfSpeech: s.partOfSpeech,
       meaning: s.meaning,
       definition: s.definition,
+      ...(s.styleLabel ? { styleLabel: s.styleLabel } : {}),
       examples: s.examples.map((e) => ({ en: e.en, hi: e.hi })),
     })),
     synonyms: doc.synonyms.map((p) => ({ en: p.en, hi: p.hi })),

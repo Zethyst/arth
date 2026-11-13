@@ -67,10 +67,10 @@ class AiLookupButton extends ConsumerWidget {
   }
 }
 
-enum _MenuItem { highlights, bookmarks, note, cards, words, mode }
+enum _MenuItem { highlights, bookmarks, note, cards, words, scanPage, summarise, mode }
 
 class ReaderMoreMenu extends ConsumerWidget {
-  const ReaderMoreMenu({required this.onNote, required this.onCards, super.key, this.onHighlights, this.onBookmarks, this.onWords, this.onToggleMode});
+  const ReaderMoreMenu({required this.onNote, required this.onCards, super.key, this.onHighlights, this.onBookmarks, this.onWords, this.onScanPage, this.onSummarise, this.onToggleMode});
 
   final VoidCallback? onHighlights;
   final VoidCallback? onBookmarks;
@@ -79,6 +79,12 @@ class ReaderMoreMenu extends ConsumerWidget {
 
   /// The words looked up in this book (vocabulary).
   final VoidCallback? onWords;
+
+  /// The uncommon words on the page in front of the reader.
+  final VoidCallback? onScanPage;
+
+  /// What happened on this page, in Hindi.
+  final VoidCallback? onSummarise;
 
   /// Switch between reading mode (page turns) and scrolling mode; null where
   /// a reader has only one.
@@ -120,6 +126,10 @@ class ReaderMoreMenu extends ConsumerWidget {
             onCards();
           case _MenuItem.words:
             onWords?.call();
+          case _MenuItem.scanPage:
+            onScanPage?.call();
+          case _MenuItem.summarise:
+            onSummarise?.call();
           case _MenuItem.mode:
             onToggleMode?.call();
         }
@@ -129,6 +139,8 @@ class ReaderMoreMenu extends ConsumerWidget {
           settings.bookPages
               ? item(_MenuItem.mode, Icons.swap_vert_rounded, t.scrollingMode)
               : item(_MenuItem.mode, Icons.auto_stories_outlined, t.readingMode),
+        if (onScanPage != null) item(_MenuItem.scanPage, Icons.travel_explore_rounded, t.scanPageWords),
+        if (onSummarise != null) item(_MenuItem.summarise, Icons.subject_rounded, t.summaryAction),
         item(_MenuItem.note, Icons.edit_note_rounded, t.addNote),
         item(_MenuItem.cards, Icons.style_outlined, t.cardsForBook),
         if (onWords != null) item(_MenuItem.words, Icons.spellcheck_rounded, t.wordsFromBook),

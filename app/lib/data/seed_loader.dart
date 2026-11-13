@@ -381,20 +381,22 @@ class SeedLoader {
     final entries = <(String, int, String)>[];
     final forms = <(String, String)>[];
     final phrases = <(String, String, String, int)>[];
+    final idioms = <(String, int, String, String, int, int, String)>[];
     String? asOf;
     int? maxRank;
     var sawEnd = false;
 
     Future<void> flush() async {
-      final n = entries.length + forms.length + phrases.length;
+      final n = entries.length + forms.length + phrases.length + idioms.length;
       final rank = entries.isEmpty ? null : entries.last.$2;
       final stored = entries.length;
-      await _store.upsertSeed(entries: entries, forms: forms, phrases: phrases);
+      await _store.upsertSeed(entries: entries, forms: forms, phrases: phrases, idioms: idioms);
       if (n > 0) _moved++;
       if (rank != null) onEntries?.call(rank, stored);
       entries.clear();
       forms.clear();
       phrases.clear();
+      idioms.clear();
       _report(_progress.copyWith(done: _progress.done + n));
     }
 
@@ -405,7 +407,8 @@ class SeedLoader {
         case 'meta':
           asOf = obj['asOf'] as String?;
           maxRank = obj['maxRank'] as int?; // absent from older servers
-          final total = (obj['entries'] as int) + (obj['forms'] as int) + (obj['phrases'] as int);
+          // `idioms` is absent from servers older than the idioms feature.
+          final total = (obj['entries'] as int) + (obj['forms'] as int) + (obj['phrases'] as int) + ((obj['idioms'] as int?) ?? 0);
           _report(_progress.copyWith(total: _progress.total + total));
         case 'entry':
           entries.add((obj['word'] as String, obj['freqRank'] as int, jsonEncode(obj['entry'])));
@@ -413,10 +416,22 @@ class SeedLoader {
           forms.add((obj['form'] as String, obj['lemma'] as String));
         case 'phrase':
           phrases.add((obj['phrase'] as String, obj['lemma'] as String, obj['firstToken'] as String, obj['tokenCount'] as int));
+        case 'idiom':
+          final i = obj['idiom']! as Map<String, dynamic>;
+          idioms.add((
+            i['word']! as String,
+            (i['senseIndex'] as int?) ?? 0,
+            ((i['tags'] as List<dynamic>?) ?? const []).join('\u001f'),
+            (i['etymology'] as String?) ?? '',
+            // Both were sent beside the idiom before they were part of it.
+            (i['freqRank'] as int?) ?? (obj['freqRank'] as int?) ?? 0,
+            (i['weight'] as int?) ?? 0,
+            (i['kind'] as String?) ?? 'idiom',
+          ));
         case 'end':
           sawEnd = true;
       }
-      if (entries.length + forms.length + phrases.length >= _batchSize) await flush();
+      if (entries.length + forms.length + phrases.length + idioms.length >= _batchSize) await flush();
     }
     await flush();
     if (!sawEnd) throw const SeedTruncated();

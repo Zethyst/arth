@@ -29,13 +29,23 @@ from arth_pipeline.wiktionary import (
     pick_ipa,
     sense_is_dropped,
     sense_is_pointer,
-    sense_is_restricted,
+    sense_register,
 )
 
 MAX_EXAMPLE_CHARS = 160
 MIN_QUOTATION_YEAR = 1800  # older quotations read as a foreign language to our reader
 _YEAR_RE = re.compile(r"\b(1[0-9]{3}|20[0-9]{2})\b")
 _YEAR_PREFIX_RE = re.compile(r"^(1[0-9]{3}|20[0-9]{2})\b")
+# A citation whose source sits in the example text itself, so Wiktionary never
+# tagged it a quotation: a closing quote followed by an attribution, or a
+# trailing year. "...do honor to Christopher Columbus." - New York Times, 1937
+_ATTRIBUTION_RE = re.compile(r"[\"\u201d]\s*[-\u2013\u2014]\s*\w|,\s*(?:1[5-9]|20)\d\d\s*[.)\]]?$")
+# A sentence ABOUT the phrase rather than one using it: To "walk the straight
+# and narrow" means to live a moral, disciplined life. Only when the quoted span
+# is the headword -- "Do you know what 'tergiversate' means? Beats me!" is a use.
+_GLOSSING_RE = re.compile(
+    r"[\"\u201c]([^\"\u201d]+)[\"\u201d](?=.*\b(?:means?|refers? to|is used)\b)", re.I
+)
 # POS that rarely matter to a reader get at most one sense so they don't crowd out nouns/verbs.
 MINOR_POS = {"intj", "particle", "det", "article", "contraction", "num"}
 # A POS earns a guaranteed slot only if its best sense has real evidence of use:
@@ -56,8 +66,52 @@ def clean_example(text: str) -> str | None:
     return t
 
 
-def sense_examples(sense: dict[str, Any], limit: int) -> list[str]:
-    """Plain usage examples first; a post-1800 quotation only as a fallback. Shortest first."""
+# Wiktionary examples that no shape rule can judge: grammatical uses of the
+# phrase whose SUBJECT makes them unusable on a card a learner is shown without
+# context. Kept short and literal on purpose -- this is not a content filter for
+# the dictionary, where an example arrives beside the book that prompted it.
+UNUSABLE_EXAMPLES: frozenset[str] = frozenset(
+    {
+        # "connect the dots": a classmate's Hitler joke going unpunished.
+        "killer was his hero",
+    }
+)
+
+
+def example_teaches(text: str, word: str) -> bool:
+    """Whether [text] demonstrates [word] well enough to be an idiom card's example.
+
+    Only applied on the plain-only path: a citation that carries its own
+    attribution, a sentence that explains the phrase instead of using it, and the
+    handful in [UNUSABLE_EXAMPLES]. The first two read as something other than an
+    example on a card where the example *is* the lesson. The entry prompt writes a
+    plain sentence of its own whenever this leaves a sense with none.
+    """
+    if _ATTRIBUTION_RE.search(text):
+        return False
+    if any(bad in text for bad in UNUSABLE_EXAMPLES):
+        return False
+    head = {w for w in re.findall(r"[a-z]+", word.lower()) if len(w) > 2}
+    for quoted in _GLOSSING_RE.findall(text):
+        inside = {w for w in re.findall(r"[a-z]+", quoted.lower()) if len(w) > 2}
+        if head and head <= inside:
+            return False
+    return True
+
+
+def sense_examples(
+    sense: dict[str, Any], limit: int, *, plain_only: bool = False, word: str = ""
+) -> list[str]:
+    """Plain usage examples first; a post-1800 quotation only as a fallback. Shortest first.
+
+    With [plain_only], quotations are dropped rather than used as a fallback and
+    the survivors must pass [example_teaches].
+    A citation is a line lifted out of a book or a song — "Too many joy rides
+    in daddy's Jaguar / Too many white lies" — which reads as a riddle on an
+    idiom card, where the example *is* the lesson. The entry prompt writes a
+    plain sentence of its own when it is given none, which is what that card
+    wants.
+    """
     plain: list[str] = []
     quotes: list[str] = []
     for ex in sense.get("examples") or ():
@@ -72,7 +126,31 @@ def sense_examples(sense: dict[str, Any], limit: int) -> list[str]:
             plain.append(t)
     plain.sort(key=len)
     quotes.sort(key=len)
+    if plain_only:
+        return [t for t in plain if example_teaches(t, word)][:limit]
     return (plain + quotes)[:limit]
+
+
+# How far a label pushes a sense down the list. These decide the ORDER senses
+# appear in and nothing else: every sense here is still shown, with its
+# register label beside it. The old code docked restricted senses 8 points,
+# which with only 8 slots meant a reader never saw the slang sense of a common
+# word at all.
+RANK_PENALTY: dict[str, int] = {
+    "archaic": 5,
+    "dated": 4,
+    "historical": 4,
+    "rare": 5,
+    "literary": 3,
+    "poetic": 3,
+    "nonstandard": 3,
+    "dialectal": 3,
+    "slang": 2,
+    "humorous": 2,
+    "informal": 1,
+    "colloquial": 1,
+}
+REGIONAL_PENALTY = 3
 
 
 def sense_score(sense: dict[str, Any]) -> int:
@@ -82,7 +160,7 @@ def sense_score(sense: dict[str, Any]) -> int:
     commonness signal in kaikki is how many languages editors bothered to
     translate a sense into: for "fair", "Just." has 91 sense-level translations
     and "(shipbuilding) smooth" has 0. Examples and synonyms nudge; domain
-    labels, archaic/dated and restricted registers push down without excluding.
+    labels and marked registers push down without excluding.
     """
     score = len(sense.get("translations") or ())
     if any(ex.get("type") != "quotation" and not ex.get("ref") for ex in sense.get("examples") or ()):
@@ -93,11 +171,19 @@ def sense_score(sense: dict[str, Any]) -> int:
     if gloss.startswith("("):
         score -= 2
     tags = set(sense.get("tags") or ())
-    if tags & {"archaic", "dated", "literary", "historical"}:
-        score -= 4
-    if sense_is_restricted(sense):
-        score -= 8
+    penalties = [RANK_PENALTY[t] for t in tags if t in RANK_PENALTY]
+    if any(_is_regional_tag(t) for t in tags):
+        penalties.append(REGIONAL_PENALTY)
+    # One penalty, the heaviest: a sense tagged both archaic and rare is not
+    # twice as obscure as one tagged archaic.
+    if penalties:
+        score -= max(penalties)
     return score
+
+
+def _is_regional_tag(tag: str) -> bool:
+    # kaikki writes place/community labels capitalised: Louisiana, Scotland.
+    return tag[:1].isupper() and tag not in ("US", "UK", "British", "American")
 
 
 def related(entry: dict[str, Any], senses: list[dict[str, Any]], key: str, limit: int) -> list[str]:
@@ -119,7 +205,13 @@ def related(entry: dict[str, Any], senses: list[dict[str, Any]], key: str, limit
     return out
 
 
-def extract_word(word: str, entries: list[dict[str, Any]], is_phrase: bool) -> dict[str, Any] | None:
+def extract_word(
+    word: str,
+    entries: list[dict[str, Any]],
+    is_phrase: bool,
+    *,
+    plain_examples_only: bool = False,
+) -> dict[str, Any] | None:
     # One bucket per POS (merging etymologies), each sorted by score, stable.
     buckets: dict[str, list[tuple[int, int, dict[str, Any]]]] = defaultdict(list)
     order = 0
@@ -145,8 +237,14 @@ def extract_word(word: str, entries: list[dict[str, Any]], is_phrase: bool) -> d
                     order,
                     {
                         "partOfSpeech": pos_hi,
+                        "styleLabel": sense_register(s),
                         "gloss": gloss_text(s),
-                        "examples": sense_examples(s, config.max_examples_per_sense),
+                        "examples": sense_examples(
+                            s,
+                            config.max_examples_per_sense,
+                            plain_only=plain_examples_only,
+                            word=word,
+                        ),
                     },
                 )
             )

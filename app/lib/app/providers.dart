@@ -8,6 +8,7 @@ import 'package:arth/app/account_providers.dart';
 import 'package:arth/app/settings.dart';
 import 'package:arth/app/strings.dart';
 import 'package:arth/app/tts.dart';
+import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/dictionary_repo.dart';
 import 'package:arth/data/highlight_plan.dart';
@@ -98,6 +99,13 @@ final dictionaryRepoProvider = Provider<DictionaryRepo>(
     store: ref.watch(localStoreProvider),
     api: ref.watch(apiClientProvider),
   ),
+);
+
+/// The idioms and phrasal verbs built on a headword. Cheap and cached per
+/// word; the entry renders without waiting for it.
+final AutoDisposeFutureProviderFamily<List<RelatedPhrase>, String> phrasesOfWordProvider =
+    FutureProvider.autoDispose.family<List<RelatedPhrase>, String>(
+  (ref, lemma) => ref.watch(dictionaryRepoProvider).phrasesFor(lemma),
 );
 
 final ttsProvider = Provider<TtsService>((_) => TtsService());

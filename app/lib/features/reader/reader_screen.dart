@@ -37,11 +37,14 @@ import 'package:arth/features/reader/highlights/highlight_bar.dart';
 import 'package:arth/features/reader/highlights/highlight_colors.dart';
 import 'package:arth/features/reader/highlights/highlights_sheet.dart';
 import 'package:arth/features/reader/page_text_cache.dart';
+import 'package:arth/features/reader/page_vocabulary.dart';
+import 'package:arth/features/reader/page_words_sheet.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:arth/features/reader/reader_guide.dart';
 import 'package:arth/features/reader/reader_menu.dart';
 import 'package:arth/features/reader/reading_tracking.dart';
 import 'package:arth/features/reader/search_sheet.dart';
+import 'package:arth/features/reader/summary_sheet.dart';
 import 'package:arth/features/reader/tooltip/tooltip_layer.dart';
 import 'package:arth/features/settings/reading_settings_sheet.dart';
 import 'package:flutter/material.dart';
@@ -689,6 +692,48 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     await _openWord(cache, page, idx, word);
   }
 
+  /// Gathers the uncommon words on the page in front of the reader and lists
+  /// them. Tapping one opens exactly the card a tap on the word itself would,
+  /// so the sheet is a way in, not a second kind of answer.
+  Future<void> _scanPageWords() async {
+    final cache = _cache;
+    final page = _page;
+    if (cache == null || page == null) return;
+    final idx = await cache.page(page);
+    if (!mounted) return;
+    if (idx.words.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(stringsProvider).noTextOnPage)));
+      return;
+    }
+    final words = await scanPageVocabulary([idx], ref.read(localStoreProvider));
+    final rows = await rowsFor(ref.read(dictionaryRepoProvider), words);
+    if (!mounted) return;
+    await showPageWordsSheet(
+      context,
+      rows: rows,
+      onTap: (r) => unawaited(_openWord(cache, page, idx, idx.words[r.word.wordIndex])),
+    );
+  }
+
+  /// What happened on this page, in Hindi. The page's own text is what the
+  /// reader has just been through, so that is what gets summarised.
+  Future<void> _summarisePage() async {
+    final cache = _cache;
+    final page = _page;
+    if (cache == null || page == null) return;
+    final idx = await cache.page(page);
+    if (!mounted) return;
+    final text = idx.fullText.trim();
+    final t = ref.read(stringsProvider);
+    if (text.length < kMinSummaryChars) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(idx.words.isEmpty ? t.noTextOnPage : t.summaryTooShort)),
+      );
+      return;
+    }
+    await showSummarySheet(context, text: text);
+  }
+
   Future<void> _openWord(PageTextCache cache, int page, PageTextIndex idx, PageWord word) async {
     final rc = ref.read(readerControllerProvider.notifier);
     final sentence = await cache.sentenceFor(page, idx, word);
@@ -1010,6 +1055,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
           const AiLookupButton(),
           ReaderMoreMenu(
             onWords: () => context.push(Uri(path: '/vocabulary', queryParameters: {'book': '${widget.book.id}', 'title': widget.book.title}).toString()),
+            onScanPage: () => unawaited(_scanPageWords()),
+            onSummarise: () => unawaited(_summarisePage()),
             onHighlights: _showHighlights,
             onBookmarks: () => showBookmarksSheet(
               context,

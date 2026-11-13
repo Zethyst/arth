@@ -84,6 +84,8 @@ export function parseGeneration(x: WiktionaryExtract, content: string): { ok: tr
     if (!exp) return;
     if (s.index !== exp.index) errors.push(`senses[${i}].index: expected ${exp.index}, got ${s.index}`);
     s.partOfSpeech = exp.partOfSpeech; // our mapping, not the model's
+    // Wiktionary's label, carried straight through: never the model's to write.
+    if (exp.styleLabel) s.styleLabel = exp.styleLabel;
     checkHindi(`senses[${i}].meaning`, s.meaning, errors);
     checkHindi(`senses[${i}].definition`, s.definition, errors);
     s.examples.forEach((ex, j) => {

@@ -38,6 +38,10 @@ class Sense(BaseModel):
     )
     meaning: str = Field(..., description="Hindi, short. The tooltip headline.", min_length=1)
     definition: str = Field(..., description="Hindi, one plain sentence.", min_length=1)
+    styleLabel: str | None = Field(
+        None,
+        description="How the sense is used, in Hindi, when it is not plain everyday English: स्लैंग | अनौपचारिक | औपचारिक | पुराना | साहित्यिक | मज़ाक़ में | क्षेत्रीय | ब्रिटिश | अमेरिकी | कम प्रचलित. Empty for an ordinary sense. Set from Wiktionary's own labels, never written by the model. Absent on entries generated before registers existed.",
+    )
     examples: list[BilingualPair]
 
 

@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/core/reading_stats.dart';
 import 'package:arth/core/reading_tracker.dart';
+import 'package:arth/core/text/phrase_windows.dart';
 import 'package:arth/core/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -99,6 +100,118 @@ class Book {
     final pages = pageCount;
     return pages == null || pages == 0 ? null : (lastPage / pages).clamp(0, 1);
   }
+}
+
+/// How many of an entry's senses are indexed for Hindi search. A word can
+/// carry 25 senses since the cap was raised, and the rare ones at the bottom
+/// are not what somebody searching a meaning is reaching for.
+const int kIndexedSenses = 5;
+
+/// Anything that separates words in a Hindi gloss: spaces, the danda, and the
+/// punctuation the meanings are written with.
+final RegExp _termSplit = RegExp(r'[\s,;।|/()\[\]–—-]+');
+
+/// The searchable Hindi terms in an entry's stored JSON.
+///
+/// Takes the short `meaning` of each of the first [kIndexedSenses] senses —
+/// not `definition`, which is a sentence and would bury the index in common
+/// words like "करना".
+Set<String> meaningTerms(String entryJson) {
+  final out = <String>{};
+  try {
+    final senses = (jsonDecode(entryJson) as Map<String, dynamic>)['senses'];
+    if (senses is! List) return out;
+    for (final s in senses.take(kIndexedSenses)) {
+      final meaning = (s as Map<String, dynamic>)['meaning'];
+      if (meaning is! String) continue;
+      for (final term in meaning.split(_termSplit)) {
+        if (term.length >= 2) out.add(term);
+      }
+    }
+  } on FormatException {
+    return out;
+  }
+  return out;
+}
+
+/// What kind of phrase a row on the idioms screen is. A phrasal verb is a
+/// verb plus particles whose meaning you simply have to be told ("give up");
+/// an idiom is a picture ("spill the beans"). They are taught the same way.
+enum IdiomKind { idiom, phrasal }
+
+/// An idiom as the phone holds it: the seed's pointer, the dictionary entry
+/// it points at, and how the reader is getting on with it.
+class IdiomRow {
+  const IdiomRow({
+    required this.phrase,
+    required this.senseIndex,
+    required this.tags,
+    required this.etymology,
+    required this.freqRank,
+    required this.weight,
+    required this.kind,
+    required this.entry,
+    this.saved = false,
+    this.seenAt,
+    this.rightCount = 0,
+    this.wrongCount = 0,
+  });
+
+  factory IdiomRow.fromRow(Map<String, Object?> r) {
+    final tags = (r['tags'] as String?) ?? '';
+    final seen = r['seen_at'] as int?;
+    return IdiomRow(
+      phrase: r['phrase']! as String,
+      senseIndex: (r['sense_index'] as int?) ?? 0,
+      tags: tags.isEmpty ? const [] : tags.split('\u001f'),
+      etymology: (r['etymology'] as String?) ?? '',
+      freqRank: (r['freq_rank'] as int?) ?? 0,
+      weight: (r['weight'] as int?) ?? 0,
+      kind: (r['kind'] as String?) == 'phrasal' ? IdiomKind.phrasal : IdiomKind.idiom,
+      entry: DictionaryEntry.fromJson(jsonDecode(r['entry_json']! as String) as Map<String, dynamic>),
+      saved: (r['saved'] as int?) == 1,
+      seenAt: seen == null ? null : DateTime.fromMillisecondsSinceEpoch(seen),
+      rightCount: (r['right_count'] as int?) ?? 0,
+      wrongCount: (r['wrong_count'] as int?) ?? 0,
+    );
+  }
+
+  final String phrase;
+
+  /// Which sense of [entry] is the idiomatic one. Not always the first:
+  /// "peanut butter" is an idiom for spreading resources too thin.
+  final int senseIndex;
+
+  /// Register labels in Hindi (स्लैंग, पुराना…); empty for a neutral phrase.
+  final List<String> tags;
+
+  /// How many languages the phrase is translated into: how well known it is,
+  /// and so the order idioms are shown in. 0 on a phone whose last seed
+  /// predates the field.
+  final int weight;
+
+  /// Whether this is a phrasal verb or a figurative idiom.
+  final IdiomKind kind;
+
+  /// Wiktionary's etymology, in English, or empty.
+  final String etymology;
+  final int freqRank;
+  final DictionaryEntry entry;
+  final bool saved;
+  final DateTime? seenAt;
+  final int rightCount;
+  final int wrongCount;
+
+  /// The sense this idiom is about, falling back to the first if the seed
+  /// and the entry ever disagree.
+  Sense get sense =>
+      senseIndex < entry.senses.length ? entry.senses[senseIndex] : entry.senses.first;
+
+  /// Its Hindi meaning — the line on the front of a card.
+  String get meaning => sense.meaning;
+
+  /// Examples for this sense, each English with its Hindi.
+  List<BilingualPair> get examples => sense.examples;
 }
 
 class SavedWord {
@@ -372,7 +485,7 @@ class Bookmark {
 class LocalStore {
   LocalStore._(this._db);
 
-  static const _schemaVersion = 10;
+  static const _schemaVersion = 13;
 
   final Database _db;
 
@@ -441,10 +554,105 @@ class LocalStore {
             }
           }
           if (from < 10) await _createReadingLog(db);
+          // Created in their current (v12) shape, so only a database that
+          // already has the v11 tables needs the column adding.
+          if (from < 11) await _createIdioms(db);
+          if (from < 13) {
+            await _createMeaningTerms(db);
+            await _indexMeanings(db);
+          }
+          if ((from == 11 || from == 12) && await _hasTable(db, 'idioms')) {
+            // Phrasal verbs share the idioms table, marked as what they are.
+            await db.execute("ALTER TABLE idioms ADD COLUMN kind TEXT NOT NULL DEFAULT 'idiom'");
+          }
+          if (from == 11) {
+            // Idioms are ordered by how well known they are, not by the rank of
+            // their rarest word. The next seed fills it; until then every row
+            // weighs 0 and the list falls back to freq_rank.
+            await db.execute('ALTER TABLE idioms ADD COLUMN weight INTEGER NOT NULL DEFAULT 0');
+            await db.execute('DROP INDEX IF EXISTS idioms_rank');
+            await db.execute('CREATE INDEX idioms_known ON idioms(weight DESC, freq_rank ASC)');
+          }
         },
       ),
     );
     return LocalStore._(db);
+  }
+
+  /// Whether [name] is a table in this database. Upgrades reach databases
+  /// that were interrupted or sideloaded, so a step never assumes a table it
+  /// did not create in the same run.
+  static Future<bool> _hasTable(Database db, String name) async {
+    final rows = await db.rawQuery(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+      [name],
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Which Hindi words lead to which English headword, so a reader who knows
+  /// the meaning but not the word can find it. The meanings live inside each
+  /// entry's JSON, and `LIKE '%…%'` over 23,000 JSON blobs is not a search, so
+  /// they are split into terms here and indexed.
+  static Future<void> _createMeaningTerms(Database db) async {
+    await db.execute('''
+      CREATE TABLE meaning_terms (
+        term TEXT NOT NULL,
+        word TEXT NOT NULL,
+        PRIMARY KEY (term, word)
+      ) WITHOUT ROWID''');
+    await db.execute('CREATE INDEX meaning_terms_term ON meaning_terms(term)');
+  }
+
+  /// Fills [_createMeaningTerms] from the entries already on the phone, so a
+  /// reader who downloaded the dictionary before this existed does not have to
+  /// download it again.
+  static Future<void> _indexMeanings(Database db) async {
+    if (!await _hasTable(db, 'entries')) return;
+    const page = 2000;
+    for (var offset = 0;; offset += page) {
+      final rows = await db.query('entries', columns: ['word', 'json'], limit: page, offset: offset);
+      if (rows.isEmpty) break;
+      final batch = db.batch();
+      for (final r in rows) {
+        for (final term in meaningTerms(r['json']! as String)) {
+          batch.insert(
+            'meaning_terms',
+            {'term': term, 'word': r['word']! as String},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
+      }
+      await batch.commit(noResult: true);
+      if (rows.length < page) break;
+    }
+  }
+
+  /// The idioms the app teaches, and how the reader is getting on with each.
+  /// `idioms` is seed data, replaced wholesale on every download; progress is
+  /// the reader's own and is never touched by a seed, so the two are separate
+  /// tables rather than columns on one.
+  static Future<void> _createIdioms(Database db) async {
+    await db.execute('''
+      CREATE TABLE idioms (
+        phrase TEXT PRIMARY KEY,
+        sense_index INTEGER NOT NULL DEFAULT 0,
+        tags TEXT NOT NULL DEFAULT '',
+        etymology TEXT NOT NULL DEFAULT '',
+        freq_rank INTEGER NOT NULL,
+        weight INTEGER NOT NULL DEFAULT 0,
+        kind TEXT NOT NULL DEFAULT 'idiom'
+      )''');
+    await db.execute('CREATE INDEX idioms_known ON idioms(weight DESC, freq_rank ASC)');
+    await db.execute('''
+      CREATE TABLE idiom_progress (
+        phrase TEXT PRIMARY KEY,
+        saved INTEGER NOT NULL DEFAULT 0,
+        seen_at INTEGER,
+        right_count INTEGER NOT NULL DEFAULT 0,
+        wrong_count INTEGER NOT NULL DEFAULT 0
+      )''');
+    await db.execute('CREATE INDEX idiom_progress_saved ON idiom_progress(saved, seen_at)');
   }
 
   static Future<void> _create(Database db) async {
@@ -465,6 +673,8 @@ class LocalStore {
         token_count INTEGER NOT NULL
       )''');
     await db.execute('CREATE INDEX phrases_first ON phrases(first_token)');
+    await _createIdioms(db);
+    await _createMeaningTerms(db);
     await db.execute('''
       CREATE TABLE books (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -657,6 +867,26 @@ class LocalStore {
     return rows.isEmpty ? null : rows.first['lemma']! as String;
   }
 
+  /// Every stored phrase that could match one of the tap's windows: the ones
+  /// whose first token is a window's first token, plus those that open with a
+  /// slot. One indexed query per tap, rather than one per window — a nine-token
+  /// window set asks about 44 phrases, and 44 round trips on a tap is not free.
+  Future<List<({String phrase, String lemma})>> phraseCandidates(
+    Set<String> firstTokens, {
+    int maxTokens = kMaxPhraseTokens,
+  }) async {
+    if (firstTokens.isEmpty) return const [];
+    final marks = List.filled(firstTokens.length, '?').join(',');
+    final rows = await _db.rawQuery(
+      'SELECT phrase, lemma FROM phrases'
+      ' WHERE first_token IN ($marks) AND token_count <= ?',
+      [...firstTokens, maxTokens],
+    );
+    return [
+      for (final r in rows) (phrase: r['phrase']! as String, lemma: r['lemma']! as String),
+    ];
+  }
+
   Future<String?> phraseLemma(String phrase) async {
     final rows = await _db.query(
       'phrases',
@@ -666,6 +896,68 @@ class LocalStore {
       limit: 1,
     );
     return rows.isEmpty ? null : rows.first['lemma']! as String;
+  }
+
+  /// The canonical phrases that use [lemma] as a whole token — the idioms and
+  /// phrasal verbs of a word. The phrases table is a few thousand short rows,
+  /// so the three unindexed LIKEs cost less than keeping a tokens table.
+  Future<List<String>> phrasesUsing(String lemma, {int limit = 40}) async {
+    if (lemma.isEmpty || lemma.contains(' ')) return const [];
+    final e = lemma.replaceAll('%', r'\%').replaceAll('_', r'\_');
+    final rows = await _db.query(
+      'phrases',
+      columns: ['DISTINCT lemma'],
+      where: r"lemma LIKE ? ESCAPE '\' OR lemma LIKE ? ESCAPE '\' OR lemma LIKE ? ESCAPE '\'",
+      whereArgs: ['$e %', '% $e %', '% $e'],
+      limit: limit,
+    );
+    return [for (final r in rows) r['lemma']! as String];
+  }
+
+  // ---- idioms ----
+
+  /// Every idiom on the phone, best known first. There are a couple of
+  /// thousand, so the screens hold the whole list and filter it in memory
+  /// rather than going back to SQLite for each view.
+  Future<List<IdiomRow>> allIdioms() async {
+    final rows = await _db.rawQuery('''
+      SELECT i.phrase, i.sense_index, i.tags, i.etymology, i.freq_rank, i.weight, i.kind,
+             e.json AS entry_json,
+             p.saved, p.seen_at, p.right_count, p.wrong_count
+        FROM idioms i
+        JOIN entries e ON e.word = i.phrase
+        LEFT JOIN idiom_progress p ON p.phrase = i.phrase
+       ORDER BY i.weight DESC, i.freq_rank ASC, i.phrase ASC''');
+    return [for (final r in rows) IdiomRow.fromRow(r)];
+  }
+
+  Future<int> idiomCount() async =>
+      Sqflite.firstIntValue(await _db.rawQuery('SELECT COUNT(*) FROM idioms')) ?? 0;
+
+  Future<void> setIdiomSaved(String phrase, {required bool saved}) async {
+    await _db.insert(
+      'idiom_progress',
+      {'phrase': phrase, 'saved': saved ? 1 : 0},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    await _db.update('idiom_progress', {'saved': saved ? 1 : 0}, where: 'phrase = ?', whereArgs: [phrase]);
+  }
+
+  Future<void> markIdiomSeen(String phrase, {int? at}) async {
+    final when = at ?? DateTime.now().millisecondsSinceEpoch;
+    await _db.insert(
+      'idiom_progress',
+      {'phrase': phrase, 'seen_at': when},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+    await _db.update('idiom_progress', {'seen_at': when}, where: 'phrase = ?', whereArgs: [phrase]);
+  }
+
+  /// Records one practice answer.
+  Future<void> recordIdiomAnswer(String phrase, {required bool correct}) async {
+    await _db.insert('idiom_progress', {'phrase': phrase}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    final column = correct ? 'right_count' : 'wrong_count';
+    await _db.rawUpdate('UPDATE idiom_progress SET $column = $column + 1 WHERE phrase = ?', [phrase]);
   }
 
   /// Prefix search over headwords for the dictionary screen.
@@ -679,6 +971,22 @@ class LocalStore {
       limit: limit,
     );
     return rows.map((r) => r['word']! as String).toList();
+  }
+
+  /// English headwords whose Hindi meaning starts with [term], commonest
+  /// first — the other direction of the dictionary, for a reader who knows
+  /// what they want to say but not the English for it.
+  Future<List<String>> searchMeanings(String term, {int limit = 10}) async {
+    final q = term.trim();
+    if (q.length < 2) return const [];
+    final rows = await _db.rawQuery(
+      'SELECT m.word FROM meaning_terms m'
+      ' JOIN entries e ON e.word = m.word'
+      r" WHERE m.term LIKE ? ESCAPE '\'"
+      ' GROUP BY m.word ORDER BY MIN(e.freq_rank) ASC LIMIT ?',
+      ['${q.replaceAll('%', r'\%').replaceAll('_', r'\_')}%', limit],
+    );
+    return [for (final r in rows) r['word']! as String];
   }
 
   /// All headwords, for Levenshtein suggestions. ~20k short strings is fine.
@@ -706,13 +1014,37 @@ class LocalStore {
     required List<(String form, String lemma)> forms,
     required List<(String phrase, String lemma, String first, int count)>
         phrases,
+    List<(String phrase, int senseIndex, String tags, String etymology, int rank, int weight, String kind)>
+        idioms = const [],
   }) async {
-    if (entries.isEmpty && forms.isEmpty && phrases.isEmpty) return;
+    if (entries.isEmpty && forms.isEmpty && phrases.isEmpty && idioms.isEmpty) return;
     final batch = _db.batch();
     for (final (word, rank, json) in entries) {
       batch.insert(
         'entries',
         {'word': word, 'freq_rank': rank, 'json': json},
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      for (final term in meaningTerms(json)) {
+        batch.insert(
+          'meaning_terms',
+          {'term': term, 'word': word},
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    }
+    for (final (phrase, senseIndex, tags, etymology, rank, weight, kind) in idioms) {
+      batch.insert(
+        'idioms',
+        {
+          'phrase': phrase,
+          'sense_index': senseIndex,
+          'tags': tags,
+          'etymology': etymology,
+          'freq_rank': rank,
+          'weight': weight,
+          'kind': kind,
+        },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }

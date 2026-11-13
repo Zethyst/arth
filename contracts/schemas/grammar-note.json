@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/grammar-note.json",
+  "title": "GrammarNote",
+  "description": "Why an English sentence is built the way it is, explained in Hindi. The translation says what a sentence means; this says how it works, which is the wall a reader hits once the words stop being the problem.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "shape", "points"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1, "description": "The sentence explained, as it was sent." },
+    "shape": {
+      "type": "string",
+      "minLength": 1,
+      "description": "एक पंक्ति में वाक्य की बनावट — the one-line shape of the sentence in Hindi, e.g. \"कर्ता + had been + क्रिया-ing — बीते समय में चलता रहा काम।\""
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "description": "The two or three things worth noticing, each tied to the words it is about.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["part", "label", "note"],
+        "properties": {
+          "part": { "type": "string", "minLength": 1, "description": "The words from the sentence this is about, copied exactly." },
+          "label": { "type": "string", "minLength": 1, "description": "What it is, in Hindi (काल, कर्मवाच्य, सर्वनाम का संदर्भ…)." },
+          "note": { "type": "string", "minLength": 1, "description": "Why it is there and what it does, in Hindi, in a sentence or two." }
+        }
+      }
+    }
+  }
+}

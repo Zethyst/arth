@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/english-draft.json",
+  "title": "EnglishDraft",
+  "description": "Hindi in, English out — the other direction from /translate, for a reader who knows what they want to say. Carries the words worth keeping and a few other ways to say the same thing, because the first English a learner is handed is rarely the one their situation wants.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["english", "vocab", "alternatives"],
+  "properties": {
+    "english": { "type": "string", "minLength": 1, "description": "Natural English for what the Hindi says — what a fluent speaker would actually write, not a word-by-word rendering." },
+    "vocab": {
+      "type": "array",
+      "maxItems": 6,
+      "description": "The English words or phrases in the answer worth learning, each with the bit of Hindi it stands for.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["en", "hi"],
+        "properties": {
+          "en": { "type": "string", "minLength": 1 },
+          "hi": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "maxItems": 3,
+      "description": "The same thing said differently, so the reader can pick what fits the person they are writing to.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tone", "text"],
+        "properties": {
+          "tone": { "type": "string", "enum": ["formal", "casual", "direct"], "description": "Which register this one is." },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

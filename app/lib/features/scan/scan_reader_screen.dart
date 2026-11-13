@@ -17,6 +17,8 @@ import 'package:arth/features/cards/card_editor.dart';
 import 'package:arth/features/cards/deck_screen.dart';
 import 'package:arth/features/plans/paid_gate.dart';
 import 'package:arth/features/reader/details_sheet.dart';
+import 'package:arth/features/reader/page_vocabulary.dart';
+import 'package:arth/features/reader/page_words_sheet.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:arth/features/reader/reader_menu.dart';
 import 'package:arth/features/reader/tooltip/tooltip_layer.dart';
@@ -42,6 +44,12 @@ class _ScanReaderScreenState extends ConsumerState<ScanReaderScreen> with AdBrea
   late List<String> _pages;
   late final PageController _pager;
   int _current = 0;
+
+  /// One key per page image, so the app-bar menu can reach the page the
+  /// reader is actually looking at — the OCR index lives in the page's own
+  /// state, not here.
+  final Map<String, GlobalKey<_ScanPageState>> _pageKeys = {};
+  GlobalKey<_ScanPageState> _keyFor(String path) => _pageKeys.putIfAbsent(path, GlobalKey<_ScanPageState>.new);
 
   @override
   void initState() {
@@ -99,6 +107,7 @@ class _ScanReaderScreenState extends ConsumerState<ScanReaderScreen> with AdBrea
           ),
           const AiLookupButton(),
           ReaderMoreMenu(
+            onScanPage: _pages.isEmpty ? null : () => unawaited(_keyFor(_pages[_current]).currentState?.scanPageWords() ?? Future<void>.value()),
             onWords: () => context.push(Uri(path: '/vocabulary', queryParameters: {'book': '${widget.book.id}', 'title': widget.book.title}).toString()),
             onNote: () => unawaited(makeScanCard(context, ref, widget.book, _current + 1, const CardDraft(kind: CardKind.idea))),
             onCards: () => context.push(deckRoute((bookId: widget.book.id, bookTitle: widget.book.title))),
@@ -118,7 +127,7 @@ class _ScanReaderScreenState extends ConsumerState<ScanReaderScreen> with AdBrea
                 unawaited(ref.read(libraryProvider.notifier).reportProgress(widget.book.id, (i + 1) / _pages.length, lastPage: i + 1));
               },
               itemBuilder: (_, i) => _ScanPage(
-                key: ValueKey(_pages[i]),
+                key: _keyFor(_pages[i]),
                 imagePath: _pages[i],
                 pageNumber: i + 1,
                 book: widget.book,
@@ -234,6 +243,26 @@ class _ScanPageState extends ConsumerState<_ScanPage> {
       return;
     }
     await _openWord(idx, word, scale);
+  }
+
+  /// The uncommon words on this photographed page, listed in one place.
+  /// Tapping one opens the same card a tap on the word itself would.
+  Future<void> scanPageWords() async {
+    final idx = _index;
+    final t = ref.read(stringsProvider);
+    if (idx == null || idx.words.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(t.noTextOnPage)));
+      return;
+    }
+    final words = await scanPageVocabulary([idx], ref.read(localStoreProvider));
+    final rows = await rowsFor(ref.read(dictionaryRepoProvider), words);
+    if (!mounted) return;
+    final scale = _fitScale(context.size?.width ?? 400);
+    await showPageWordsSheet(
+      context,
+      rows: rows,
+      onTap: (r) => unawaited(_openWord(idx, idx.words[r.word.wordIndex], scale)),
+    );
   }
 
   Future<void> _openWord(PageTextIndex idx, PageWord word, double scale) async {

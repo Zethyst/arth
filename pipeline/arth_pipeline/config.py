@@ -53,9 +53,13 @@ class Config:
     temperature: float | None = field(
         default_factory=lambda: float(_env("LLM_TEMPERATURE", "")) if _env("LLM_TEMPERATURE", "") else None
     )
-    # Devanagari tokenizes ~2–3× worse than English; an entry with 8 senses can run long.
-    max_output_tokens: int = 3000
-    max_senses_per_entry: int = 8
+    # Devanagari tokenizes ~2–3× worse than English; an entry at the sense cap
+    # can run long. Budget ~350 output tokens per sense plus the header.
+    max_output_tokens: int = 9000
+    # Oxford gives "get" around forty senses; eight was the cap readers kept
+    # hitting, and 18% of the dictionary sat exactly on it. Twenty-five covers
+    # every word we have seen without letting one headword run away.
+    max_senses_per_entry: int = 25
     max_examples_per_sense: int = 2
     max_synonyms: int = 6
     batch_discount: float = 0.5

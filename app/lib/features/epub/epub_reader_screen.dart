@@ -38,6 +38,8 @@ import 'package:arth/features/reader/flick_physics.dart';
 import 'package:arth/features/reader/highlights/highlight_bar.dart';
 import 'package:arth/features/reader/highlights/highlight_colors.dart';
 import 'package:arth/features/reader/highlights/highlights_sheet.dart';
+import 'package:arth/features/reader/page_vocabulary.dart';
+import 'package:arth/features/reader/page_words_sheet.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:arth/features/reader/reader_guide.dart';
 import 'package:arth/features/reader/reader_menu.dart';
@@ -165,12 +167,13 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
     unawaited(ref.read(libraryProvider.notifier).touch(widget.book.id, pageCount: epub.chapterCount));
   }
 
-  void _registerDevHooks() {
-    RenderParagraphBlock? renderOf(int block) {
-      final r = _mounted[block]?.currentContext?.findRenderObject();
-      return r is RenderParagraphBlock && r.hasSize ? r : null;
-    }
+  /// The laid-out paragraph for a block, or null when it isn't on screen.
+  RenderParagraphBlock? renderOf(int block) {
+    final r = _mounted[block]?.currentContext?.findRenderObject();
+    return r is RenderParagraphBlock && r.hasSize ? r : null;
+  }
 
+  void _registerDevHooks() {
     DevHooks.on('tapWord', (p) async {
       final key = normalizeWord(p['word'] ?? '');
       final nth = int.tryParse(p['nth'] ?? '') ?? 0;
@@ -573,6 +576,37 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
     unawaited(_openWord(at, render, word));
   }
 
+  /// The uncommon words on the screen in front of the reader. An EPUB has no
+  /// pages, so "this page" is the paragraphs currently laid out — the same
+  /// set the dev hooks and the highlighter work from.
+  Future<void> _scanPageWords() async {
+    final t = ref.read(stringsProvider);
+    final blocks = _mounted.keys.toList()..sort();
+    final renders = <RenderParagraphBlock>[];
+    final at = <int>[];
+    for (final block in blocks) {
+      final r = renderOf(block);
+      if (r == null || r.index.words.isEmpty) continue;
+      renders.add(r);
+      at.add(block);
+    }
+    if (renders.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(t.noTextOnPage)));
+      return;
+    }
+    final words = await scanPageVocabulary([for (final r in renders) r.index], ref.read(localStoreProvider));
+    final rows = await rowsFor(ref.read(dictionaryRepoProvider), words);
+    if (!mounted) return;
+    await showPageWordsSheet(
+      context,
+      rows: rows,
+      onTap: (row) {
+        final render = renders[row.word.source];
+        unawaited(_openWord((chapter: _chapter, block: at[row.word.source]), render, render.index.words[row.word.wordIndex]));
+      },
+    );
+  }
+
   Future<void> _openWord(_BlockRef at, RenderParagraphBlock render, PageWord word) async {
     final idx = render.index;
     final span = idx.sentenceOf(word.index);
@@ -944,6 +978,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
           const AiLookupButton(),
           ReaderMoreMenu(
             onWords: () => context.push(Uri(path: '/vocabulary', queryParameters: {'book': '${widget.book.id}', 'title': widget.book.title}).toString()),
+            onScanPage: epub == null ? null : () => unawaited(_scanPageWords()),
             onHighlights: epub == null ? null : _showHighlights,
             onBookmarks: epub == null
                 ? null

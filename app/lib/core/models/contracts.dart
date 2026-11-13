@@ -30,6 +30,7 @@ abstract class Sense with _$Sense {
     required String partOfSpeech,
     required String meaning,
     required String definition,
+    String? styleLabel,
     required List<BilingualPair> examples,
   }) = _Sense;
 
@@ -103,6 +104,188 @@ abstract class PhraseMatch with _$PhraseMatch {
   }) = _PhraseMatch;
 
   factory PhraseMatch.fromJson(Map<String, dynamic> json) => _$PhraseMatchFromJson(json);
+}
+
+/// One idiom or phrasal verb built on a headword, as GET /phrases/of lists them. The phrase has its own full entry; this is the line that links to it.
+@freezed
+abstract class RelatedPhrase with _$RelatedPhrase {
+  const factory RelatedPhrase({
+    required String phrase,
+    required RelatedPhraseKind kind,
+    required String partOfSpeech,
+    required String meaning,
+  }) = _RelatedPhrase;
+
+  factory RelatedPhrase.fromJson(Map<String, dynamic> json) => _$RelatedPhraseFromJson(json);
+}
+
+enum RelatedPhraseKind {
+  @JsonValue('phrasal')
+  phrasal,
+  @JsonValue('idiom')
+  idiom,
+}
+
+/// Why an English sentence is built the way it is, explained in Hindi. The translation says what a sentence means; this says how it works, which is the wall a reader hits once the words stop being the problem.
+@freezed
+abstract class GrammarNote with _$GrammarNote {
+  const factory GrammarNote({
+    required String source,
+    required String shape,
+    required List<GrammarNotePoints> points,
+  }) = _GrammarNote;
+
+  factory GrammarNote.fromJson(Map<String, dynamic> json) => _$GrammarNoteFromJson(json);
+}
+
+@freezed
+abstract class GrammarNotePoints with _$GrammarNotePoints {
+  const factory GrammarNotePoints({
+    required String part,
+    required String label,
+    required String note,
+  }) = _GrammarNotePoints;
+
+  factory GrammarNotePoints.fromJson(Map<String, dynamic> json) => _$GrammarNotePointsFromJson(json);
+}
+
+/// What just happened in a stretch of a book, in Hindi — for a reader who has followed the words but lost the thread, so they carry on instead of giving up.
+@freezed
+abstract class PassageSummary with _$PassageSummary {
+  const factory PassageSummary({
+    required String summary,
+    required List<String> points,
+    List<PassageSummaryPeople>? people,
+  }) = _PassageSummary;
+
+  factory PassageSummary.fromJson(Map<String, dynamic> json) => _$PassageSummaryFromJson(json);
+}
+
+@freezed
+abstract class PassageSummaryPeople with _$PassageSummaryPeople {
+  const factory PassageSummaryPeople({
+    required String name,
+    required String who,
+  }) = _PassageSummaryPeople;
+
+  factory PassageSummaryPeople.fromJson(Map<String, dynamic> json) => _$PassageSummaryPeopleFromJson(json);
+}
+
+/// Hindi in, English out — the other direction from /translate, for a reader who knows what they want to say. Carries the words worth keeping and a few other ways to say the same thing, because the first English a learner is handed is rarely the one their situation wants.
+@freezed
+abstract class EnglishDraft with _$EnglishDraft {
+  const factory EnglishDraft({
+    required String english,
+    required List<EnglishDraftVocab> vocab,
+    required List<EnglishDraftAlternatives> alternatives,
+  }) = _EnglishDraft;
+
+  factory EnglishDraft.fromJson(Map<String, dynamic> json) => _$EnglishDraftFromJson(json);
+}
+
+@freezed
+abstract class EnglishDraftVocab with _$EnglishDraftVocab {
+  const factory EnglishDraftVocab({
+    required String en,
+    required String hi,
+  }) = _EnglishDraftVocab;
+
+  factory EnglishDraftVocab.fromJson(Map<String, dynamic> json) => _$EnglishDraftVocabFromJson(json);
+}
+
+@freezed
+abstract class EnglishDraftAlternatives with _$EnglishDraftAlternatives {
+  const factory EnglishDraftAlternatives({
+    required EnglishDraftAlternativesTone tone,
+    required String text,
+  }) = _EnglishDraftAlternatives;
+
+  factory EnglishDraftAlternatives.fromJson(Map<String, dynamic> json) => _$EnglishDraftAlternativesFromJson(json);
+}
+
+enum EnglishDraftAlternativesTone {
+  @JsonValue('formal')
+  formal,
+  @JsonValue('casual')
+  casual,
+  @JsonValue('direct')
+  direct,
+}
+
+/// English the reader wrote, corrected. Each fix names the words it replaces so the editor can underline them in place, and says why in Hindi — a correction a learner cannot read teaches nothing.
+@freezed
+abstract class Proofread with _$Proofread {
+  const factory Proofread({
+    required String corrected,
+    required List<ProofreadFixes> fixes,
+    required List<ProofreadAlternatives> alternatives,
+  }) = _Proofread;
+
+  factory Proofread.fromJson(Map<String, dynamic> json) => _$ProofreadFromJson(json);
+}
+
+@freezed
+abstract class ProofreadAlternatives with _$ProofreadAlternatives {
+  const factory ProofreadAlternatives({
+    required ProofreadAlternativesTone tone,
+    required String text,
+  }) = _ProofreadAlternatives;
+
+  factory ProofreadAlternatives.fromJson(Map<String, dynamic> json) => _$ProofreadAlternativesFromJson(json);
+}
+
+@freezed
+abstract class ProofreadFixes with _$ProofreadFixes {
+  const factory ProofreadFixes({
+    required String wrong,
+    required String right,
+    required ProofreadFixesKind kind,
+    required String why,
+  }) = _ProofreadFixes;
+
+  factory ProofreadFixes.fromJson(Map<String, dynamic> json) => _$ProofreadFixesFromJson(json);
+}
+
+enum ProofreadAlternativesTone {
+  @JsonValue('formal')
+  formal,
+  @JsonValue('casual')
+  casual,
+  @JsonValue('concise')
+  concise,
+}
+
+enum ProofreadFixesKind {
+  @JsonValue('spelling')
+  spelling,
+  @JsonValue('grammar')
+  grammar,
+  @JsonValue('wording')
+  wording,
+}
+
+/// One turn of a spoken practice conversation: what the coach says back, and — when the learner's own sentence needed it — a better way to have said it. The correction is the point of the exercise; the conversation is what makes a learner produce a sentence at all.
+@freezed
+abstract class CoachTurn with _$CoachTurn {
+  const factory CoachTurn({
+    required String reply,
+    required String replyHindi,
+    CoachTurnBetter? better,
+    bool? closing,
+  }) = _CoachTurn;
+
+  factory CoachTurn.fromJson(Map<String, dynamic> json) => _$CoachTurnFromJson(json);
+}
+
+/// A better way to say what the learner just said. Absent when their sentence was already fine — most turns should not have one.
+@freezed
+abstract class CoachTurnBetter with _$CoachTurnBetter {
+  const factory CoachTurnBetter({
+    required String text,
+    required String why,
+  }) = _CoachTurnBetter;
+
+  factory CoachTurnBetter.fromJson(Map<String, dynamic> json) => _$CoachTurnBetterFromJson(json);
 }
 
 /// The `error` object in `{ ok: false, error }`. `message` is user-facing Hindi; `code` is for the client.

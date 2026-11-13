@@ -10,6 +10,7 @@ import { disabledPusher, fcmPusher } from './push/pusher.js';
 import { parseCloudinaryUrl } from './lib/cloudinary.js';
 import { mongoAccountStore } from './services/mongo-accounts.js';
 import { mongoCommunityStore } from './services/mongo-community.js';
+import { mongoCouponStore } from './services/mongo-coupons.js';
 import { disabledBilling, revenueCatBilling } from './billing/revenuecat.js';
 import { firebaseLoginRemover } from './auth/verifier.js';
 import { mongoSeedSource } from './routes/seed.js';
@@ -45,6 +46,7 @@ const app = buildApp({
   // Without a Firebase project nobody can sign in, so AI stays open.
   enforceQuota: config.FIREBASE_PROJECT_ID !== '',
   community: mongoCommunityStore,
+  coupons: mongoCouponStore,
   limits: {
     free: config.AI_FREE_LIMIT,
     proMonthly: config.AI_PRO_MONTHLY,

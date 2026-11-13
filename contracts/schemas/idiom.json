@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/idiom.json",
+  "title": "Idiom",
+  "description": "An English idiom the app teaches: a pointer into `entries` plus the two things a dictionary entry drops — which of its senses is the idiomatic one, and where the phrase comes from. Selected by pipeline/09_idioms.py from Wiktionary's `idiomatic` sense tag; no new text is generated for it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["word", "senseIndex", "tags", "etymology", "freqRank", "weight", "kind"],
+  "properties": {
+    "word": { "type": "string", "minLength": 1, "description": "The phrase; a key into `entries`." },
+    "senseIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Which sense of the entry is the idiomatic one. Not always 0: \"peanut butter\" is an idiom for spreading resources too thin, and its first sense is the spread."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Register labels in Hindi (स्लैंग, अनौपचारिक, पुराना, ब्रिटिश…), from that sense's Wiktionary tags. Empty for a neutral phrase."
+    },
+    "etymology": { "type": "string", "description": "Wiktionary's etymology prose, in English, or empty. Shown as \"the story behind it\", attributed to Wiktionary." },
+    "freqRank": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The frequency rank of the phrase's rarest word, carried over from the entry. A tie-breaker only: it rates \"keep good time\" above \"spill the beans\", so it must not order the list on its own."
+    },
+    "weight": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many languages Wiktionary's editors have translated the phrase into: the evidence that a reader will actually meet it. This orders the browse list and so decides which idioms a reader is shown each day."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["idiom", "phrasal"],
+      "description": "`phrasal` for a verb plus particles (give up, take off), `idiom` otherwise. They are taught the same way and share a screen; the reader filters between them."
+    }
+  }
+}

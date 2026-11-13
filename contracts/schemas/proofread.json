@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/proofread.json",
+  "title": "Proofread",
+  "description": "English the reader wrote, corrected. Each fix names the words it replaces so the editor can underline them in place, and says why in Hindi — a correction a learner cannot read teaches nothing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["corrected", "fixes", "alternatives"],
+  "properties": {
+    "corrected": { "type": "string", "minLength": 1, "description": "The whole text with every fix applied, and nothing else changed." },
+    "fixes": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "One per mistake, in the order they appear.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wrong", "right", "kind", "why"],
+        "properties": {
+          "wrong": { "type": "string", "minLength": 1, "description": "The words as the reader wrote them, copied exactly so they can be found in the text." },
+          "right": { "type": "string", "minLength": 1, "description": "What they should be." },
+          "kind": { "type": "string", "enum": ["spelling", "grammar", "wording"], "description": "spelling is a misspelt word, grammar is a rule, wording is understandable but not what a fluent writer would put." },
+          "why": { "type": "string", "minLength": 1, "description": "The reason, in Hindi, in a line." }
+        }
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "maxItems": 3,
+      "description": "The corrected text said differently.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tone", "text"],
+        "properties": {
+          "tone": { "type": "string", "enum": ["formal", "casual", "concise"] },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

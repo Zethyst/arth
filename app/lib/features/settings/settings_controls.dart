@@ -493,6 +493,19 @@ class CardReminderControls extends ConsumerWidget {
             }
           },
         ),
+        SettingsSwitch(
+          title: t.dailyIdiomSetting,
+          subtitle: t.dailyIdiomHelp,
+          value: s.dailyIdiom,
+          onChanged: (v) async {
+            await n.update((s) => s.copyWith(dailyIdiom: v));
+            if (!v) return;
+            final allowed = await ref.read(localNotificationsProvider).requestPermission();
+            if (!allowed && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.remindersBlocked)));
+            }
+          },
+        ),
         AnimatedSize(
           duration: Motion.of(context, Motion.quick),
           curve: Motion.arrive,

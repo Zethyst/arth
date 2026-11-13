@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/passage-summary.json",
+  "title": "PassageSummary",
+  "description": "What just happened in a stretch of a book, in Hindi — for a reader who has followed the words but lost the thread, so they carry on instead of giving up.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "points"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "सारांश — a short paragraph of plain Hindi saying what happened."
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The beats in order, one short Hindi line each."
+    },
+    "people": {
+      "type": "array",
+      "maxItems": 8,
+      "description": "Who appears, and who they are — a reader coming back after a week has lost the names.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "who"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "The name as the book spells it." },
+          "who": { "type": "string", "minLength": 1, "description": "Who they are, in Hindi, in a few words." }
+        }
+      }
+    }
+  }
+}

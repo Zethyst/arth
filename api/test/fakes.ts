@@ -36,6 +36,24 @@ export function memStore(
     async findPhraseLemma(p) {
       return phrases.get(p) ?? null;
     },
+    async findPhrasesByFirstToken(firstTokens, maxTokens) {
+      const want = new Set(firstTokens);
+      const out: { phrase: string; lemma: string }[] = [];
+      for (const [phrase, lemma] of phrases) {
+        const parts = phrase.split(' ');
+        if (parts.length <= maxTokens && want.has(parts[0]!)) out.push({ phrase, lemma });
+      }
+      return out;
+    },
+    async findPhrasesUsing(lemma, limit) {
+      const token = new RegExp(`(^|\\s)${lemma.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
+      const out: string[] = [];
+      for (const l of new Set(phrases.values())) {
+        if (out.length >= limit) break;
+        if (token.test(l)) out.push(l);
+      }
+      return out;
+    },
     async findSenseNotes(w) {
       return notes[w] ?? null;
     },
@@ -82,6 +100,15 @@ export const testConfig: AppOptions['config'] = {
   LLM_ENTRY_MODEL: 'fake-entry',
   LLM_ENTRY_MAX_TOKENS: 4000,
   LLM_TRANSLATE_MODEL: 'fake-translate',
+  LLM_GRAMMAR_MODEL: 'fake-grammar',
+  LLM_SUMMARY_MODEL: 'fake-summary',
+  LLM_GRAMMAR_MAX_TOKENS: 1400,
+  LLM_SUMMARY_MAX_TOKENS: 2400,
+  LLM_TOOLS_MODEL: 'fake-tools',
+  LLM_ENGLISH_MAX_TOKENS: 1400,
+  LLM_PROOFREAD_MAX_TOKENS: 2400,
+  LLM_COACH_MODEL: 'fake-coach',
+  LLM_COACH_MAX_TOKENS: 1200,
   LLM_TEMPERATURE: undefined,
   LLM_CONTEXT_MAX_TOKENS: 400,
   LLM_TRANSLATE_MAX_TOKENS: 1200,

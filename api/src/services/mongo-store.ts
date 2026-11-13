@@ -4,8 +4,10 @@ import type { LemmaStore } from './lemma.js';
 import type { PhraseStore } from './phrases.js';
 import type { SenseNotesStore } from './context.js';
 import type { StagingStore } from './ondemand.js';
+import type { RelatedPhraseStore } from './related-phrases.js';
+import { escapeRegExp } from '../lib/regex.js';
 
-export type Store = LemmaStore & PhraseStore & SenseNotesStore & StagingStore;
+export type Store = LemmaStore & PhraseStore & SenseNotesStore & StagingStore & RelatedPhraseStore;
 
 export const mongoStore: Store = {
   async findEntry(id: string): Promise<DictionaryEntry | null> {
@@ -19,6 +21,34 @@ export const mongoStore: Store = {
   async findPhraseLemma(phrase: string): Promise<string | null> {
     const doc = await PhraseModel.findById(phrase).lean();
     return doc?.lemma ?? null;
+  },
+  /**
+   * Every phrase a tap could match, in one query on the `firstToken` index.
+   * The alternative is one findById per window, and a nine-token window set
+   * is 44 of them.
+   */
+  async findPhrasesByFirstToken(firstTokens: string[], maxTokens: number) {
+    const docs = await PhraseModel.find(
+      { firstToken: { $in: firstTokens }, tokenCount: { $lte: maxTokens } },
+      { lemma: 1 },
+    ).lean();
+    return docs.map((d) => ({ phrase: d._id, lemma: d.lemma }));
+  },
+  /**
+   * Phrase lemmas that use [lemma] as a whole token. The `phrases` collection
+   * is a few thousand tiny documents, so the unanchored regex is a scan of a
+   * collection that fits in a page or two — cheaper than the multikey index
+   * the alternative would need, and it needs no migration.
+   */
+  async findPhrasesUsing(lemma: string, limit: number): Promise<string[]> {
+    const token = new RegExp(`(^|\\s)${escapeRegExp(lemma)}(\\s|$)`);
+    const docs = await PhraseModel.find({ lemma: token }, { lemma: 1 }).limit(limit * 4).lean();
+    const seen = new Set<string>();
+    for (const d of docs) {
+      if (seen.size >= limit) break;
+      seen.add(d.lemma);
+    }
+    return [...seen];
   },
   async findSenseNotes(word: string): Promise<string[] | null> {
     const doc = await SenseNotesModel.findById(word).lean();

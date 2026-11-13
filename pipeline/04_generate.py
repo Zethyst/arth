@@ -48,7 +48,11 @@ def load_extracts(path: Path, args: argparse.Namespace) -> list[dict[str, Any]]:
         entries = [e for e in entries if e["tier"] == args.tier]
     if args.words_file:
         wanted = [normalize_word(w) for w in read_wordlist(args.words_file)]
+        # Indexed both ways: normalize_word strips a trailing apostrophe, so a
+        # headword like "darn tootin'" never matches its own normalized form.
         by = {e["word"]: e for e in entries}
+        for e in entries:
+            by.setdefault(normalize_word(e["word"]), e)
         missing = [w for w in wanted if w not in by]
         if missing:
             log.warning("%d words from --words-file not in extract: %s", len(missing), missing[:10])
@@ -133,8 +137,9 @@ def report(outcomes: list[Outcome], extracts: list[dict[str, Any]], *, batch: bo
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=["live", "batch-submit", "batch-status", "batch-fetch"], required=True)
-    ap.add_argument("--in", dest="inp", type=Path, default=DATA_DIR / "extract.json")
-    ap.add_argument("--out", type=Path, default=DATA_DIR / "generated.jsonl")
+    # Both default late, from the batch state on batch-fetch: see main().
+    ap.add_argument("--in", dest="inp", type=Path, help="default: data/extract.json (or as submitted)")
+    ap.add_argument("--out", type=Path, help="default: data/generated.jsonl (batch-fetch: as submitted)")
     ap.add_argument("--name", default="run", help="batch job name (state in data/batches/<name>.json)")
     ap.add_argument("--model", help="override routing: use this model for every word")
     ap.add_argument("--tier", choices=["top", "tail"])
@@ -146,7 +151,15 @@ def main() -> None:
     ap.add_argument("--max-output-tokens", type=int, help="override config (8-sense entries can exceed 3000)")
     args = ap.parse_args()
 
-    extracts = load_extracts(args.inp, args)
+    state_path = BATCH_DIR / f"{args.name}.json"
+    # batch-fetch must read back the extract the batch was built from, not whatever
+    # --in happens to default to: the words in the state file only exist in that one.
+    state = json.loads(state_path.read_text()) if args.mode == "batch-fetch" else {}
+    inp = args.inp or Path(state.get("input") or DATA_DIR / "extract.json")
+    out = args.out or Path(state.get("out") or DATA_DIR / "generated.jsonl")
+
+    # batch-fetch loads its own entries; batch-status needs none.
+    extracts = [] if args.mode in ("batch-status", "batch-fetch") else load_extracts(inp, args)
     if args.max_output_tokens:
         object.__setattr__(config, "max_output_tokens", args.max_output_tokens)
 
@@ -168,14 +181,13 @@ def main() -> None:
         return
 
     provider = OpenAIProvider(config.openai_api_key)
-    state_path = BATCH_DIR / f"{args.name}.json"
 
     if args.mode == "live":
         print(f"live: {len(extracts)} entries", file=sys.stderr)
         t = time.time()
         outcomes = generate_live(provider, extracts, model_for)
         print(f"done in {time.time() - t:.0f}s", file=sys.stderr)
-        write_outcomes(args.out, outcomes, "live")
+        write_outcomes(out, outcomes, "live")
         report(outcomes, extracts, batch=False)
 
     elif args.mode == "batch-submit":
@@ -200,8 +212,8 @@ def main() -> None:
                 {
                     "submittedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "jobs": jobs,
-                    "input": str(args.inp),
-                    "out": str(args.out),
+                    "input": str(inp),
+                    "out": str(out),
                 },
                 indent=1,
             )
@@ -216,8 +228,7 @@ def main() -> None:
             )
 
     elif args.mode == "batch-fetch":
-        state = json.loads(state_path.read_text())
-        all_entries = json.loads(args.inp.read_text(encoding="utf-8"))["entries"]
+        all_entries = json.loads(inp.read_text(encoding="utf-8"))["entries"]
         by_word = {x["word"]: x for x in all_entries}
         outcomes: list[Outcome] = []
         extracts = []
@@ -232,8 +243,10 @@ def main() -> None:
             outcomes += settle_batch(provider, xs, results, lambda _x, m=job["model"]: m)
             extracts += xs
         if outcomes:
-            write_outcomes(Path(state.get("out", args.out)), outcomes, "batch")
+            write_outcomes(out, outcomes, "batch")
             report(outcomes, extracts, batch=True)
+        else:
+            print(f"nothing written: no submitted word is in {inp}", file=sys.stderr)
 
 
 if __name__ == "__main__":

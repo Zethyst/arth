@@ -29,18 +29,54 @@ class FakeSeedApi extends ApiClient {
   /// Per /seed/file call: bytes sent before the connection drops.
   final fileDrops = <int?>[];
 
+  /// Idiom lines to send with the extras, as (phrase, weight) — or, when
+  /// [legacyIdioms] is set, in the shape a server sent before the idiom
+  /// carried its own rank and weight.
+  final idioms = <(String, int)>[];
+  bool legacyIdioms = false;
+
   List<String> _lines({DateTime? since, int? afterRank, bool extras = false}) {
     final slice = [
       for (final r in ranks)
         if (r <= maxRank && (afterRank == null || r > afterRank) && since == null) r,
     ];
     final withExtras = afterRank == null || extras;
-    final entry = {'word': 'w', 'phonetic': '', 'senses': <Object>[]};
+    final entry = {
+      'word': 'w',
+      'ipa': '',
+      'hindiPronunciation': '',
+      'senses': [
+        {'index': 0, 'partOfSpeech': 'मुहावरा', 'meaning': 'अर्थ', 'definition': 'प।', 'examples': <Object>[]},
+      ],
+      'synonyms': <Object>[],
+      'antonyms': <Object>[],
+      'forms': <Object>[],
+      'isPhrase': true,
+    };
     return [
       jsonEncode({'t': 'meta', 'asOf': '2026-09-26T00:00:00Z', 'entries': slice.length, 'forms': withExtras ? forms : 0, 'phrases': 0, 'maxRank': maxRank}),
       for (final r in slice) jsonEncode({'t': 'entry', 'word': 'word$r', 'freqRank': r, 'entry': entry}),
       if (withExtras)
         for (var f = 0; f < forms; f++) jsonEncode({'t': 'form', 'form': 'form$f', 'lemma': 'word1'}),
+      if (withExtras)
+        for (final (phrase, weight) in idioms)
+          legacyIdioms
+              ? jsonEncode({
+                  't': 'idiom',
+                  'freqRank': 1,
+                  'idiom': {'word': phrase, 'senseIndex': 0, 'tags': <String>[], 'etymology': ''},
+                })
+              : jsonEncode({
+                  't': 'idiom',
+                  'idiom': {
+                    'word': phrase,
+                    'senseIndex': 0,
+                    'tags': <String>[],
+                    'etymology': '',
+                    'freqRank': 1,
+                    'weight': weight,
+                  },
+                }),
       jsonEncode({'t': 'end'}),
     ];
   }
@@ -96,6 +132,28 @@ void main() {
   tearDown(() => dir.deleteSync(recursive: true));
 
   const noWait = [Duration.zero, Duration.zero, Duration.zero];
+
+  test('an idiom arrives with the weight the list is ordered by', () async {
+    final store = await fresh();
+    final api = FakeSeedApi([1])..maxRank = 1;
+    api.idioms.addAll([('word1', 67)]);
+    await SeedLoader(api, store).run(onProgress: (_) {}, delta: false);
+    final all = await store.allIdioms();
+    expect(all.single.phrase, 'word1');
+    expect(all.single.weight, 67);
+  });
+
+  test('an idiom from a server older than the field loads, weighing nothing', () async {
+    final store = await fresh();
+    final api = FakeSeedApi([1])
+      ..maxRank = 1
+      ..legacyIdioms = true;
+    api.idioms.addAll([('word1', 67)]);
+    await SeedLoader(api, store).run(onProgress: (_) {}, delta: false);
+    final all = await store.allIdioms();
+    expect(all.single.weight, 0, reason: 'the old line carried no weight');
+    expect(all.single.freqRank, 1, reason: 'the rank came from beside the idiom');
+  });
 
   test('a phone seeded with the old slice fetches only the new range when the slice grows', () async {
     final store = await fresh();

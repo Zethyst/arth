@@ -26,6 +26,7 @@
         "partOfSpeech": { "type": "string", "description": "Hindi: संज्ञा | क्रिया | विशेषण | क्रियाविशेषण | सर्वनाम | पूर्वसर्ग | समुच्चयबोधक | विस्मयादिबोधक | मुहावरा" },
         "meaning": { "type": "string", "minLength": 1, "description": "Hindi, short. The tooltip headline." },
         "definition": { "type": "string", "minLength": 1, "description": "Hindi, one plain sentence." },
+        "styleLabel": { "type": "string", "description": "How the sense is used, in Hindi, when it is not plain everyday English: स्लैंग | अनौपचारिक | औपचारिक | पुराना | साहित्यिक | मज़ाक़ में | क्षेत्रीय | ब्रिटिश | अमेरिकी | कम प्रचलित. Empty for an ordinary sense. Set from Wiktionary's own labels, never written by the model. Absent on entries generated before registers existed." },
         "examples": { "type": "array", "items": { "$ref": "#/definitions/BilingualPair" } }
       }
     },

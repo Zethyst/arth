@@ -2,6 +2,7 @@
 
 import 'package:arth/app/strings.dart';
 import 'package:arth/data/card_reminders.dart';
+import 'package:arth/data/daily_idiom_reminder.dart';
 import 'package:arth/data/local_store.dart';
 import 'package:flutter/material.dart';
 
@@ -25,6 +26,8 @@ class Settings {
     this.language = UiLanguage.en,
     this.cardReminders = true,
     this.reminderHours = defaultReminderHours,
+    this.dailyIdiom = true,
+    this.dailyIdiomHour = kDefaultIdiomHour,
     this.cardFont = CardFont.montserrat,
     this.bookPages = true,
     this.usageStats = true,
@@ -57,6 +60,13 @@ class Settings {
   /// Hours after a card is made to remind, ascending.
   final List<int> reminderHours;
 
+  /// One idiom a day, at [dailyIdiomHour]. The idioms are already on the
+  /// phone, so this needs no account, server or connection.
+  final bool dailyIdiom;
+
+  /// Hour of the day (0–23, local) the daily idiom arrives.
+  final int dailyIdiomHour;
+
   final CardFont cardFont;
 
   /// Reading mode: books show a page at a time with a page-turn curl. Off,
@@ -83,6 +93,8 @@ class Settings {
     UiLanguage? language,
     bool? cardReminders,
     List<int>? reminderHours,
+    bool? dailyIdiom,
+    int? dailyIdiomHour,
     CardFont? cardFont,
     bool? bookPages,
     bool? usageStats,
@@ -98,6 +110,8 @@ class Settings {
         language: language ?? this.language,
         cardReminders: cardReminders ?? this.cardReminders,
         reminderHours: reminderHours ?? this.reminderHours,
+        dailyIdiom: dailyIdiom ?? this.dailyIdiom,
+        dailyIdiomHour: dailyIdiomHour ?? this.dailyIdiomHour,
         cardFont: cardFont ?? this.cardFont,
         bookPages: bookPages ?? this.bookPages,
         usageStats: usageStats ?? this.usageStats,
@@ -116,6 +130,8 @@ class Settings {
         language: UiLanguage.values.byName(await store.get('language') ?? 'en'),
         cardReminders: (await store.get('card_reminders') ?? 'true') == 'true',
         reminderHours: _hours(await store.get('reminder_hours')),
+        dailyIdiom: (await store.get('daily_idiom') ?? 'true') == 'true',
+        dailyIdiomHour: int.tryParse(await store.get('daily_idiom_hour') ?? '') ?? kDefaultIdiomHour,
         cardFont: CardFont.values.asNameMap()[await store.get('card_font')] ?? CardFont.montserrat,
         bookPages: (await store.get('book_pages') ?? 'true') == 'true',
         usageStats: (await store.get('usage_stats') ?? 'true') == 'true',
@@ -137,6 +153,8 @@ class Settings {
     await store.set('language', language.name);
     await store.set('card_reminders', cardReminders.toString());
     await store.set('reminder_hours', reminderHours.join(','));
+    await store.set('daily_idiom', dailyIdiom.toString());
+    await store.set('daily_idiom_hour', dailyIdiomHour.toString());
     await store.set('card_font', cardFont.name);
     await store.set('book_pages', bookPages.toString());
     await store.set('usage_stats', usageStats.toString());

@@ -66,7 +66,9 @@ def main() -> None:
         is_phrase = entry.isPhrase
         _id = normalize_sentence(entry.word).lower() if is_phrase else normalize_word(entry.word)
         doc: dict[str, Any] = {
-            **entry.model_dump(),
+            # exclude_none keeps `styleLabel: null` out of Mongo for the
+            # senses that have no label — the only optional field there is.
+            **entry.model_dump(exclude_none=True),
             "word": _id,
             "freqRank": m.get("freqRank", row.get("freqRank", 10**6)),
             "tier": m.get("tier", "tail"),

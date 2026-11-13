@@ -18,12 +18,22 @@ import 'package:arth/features/dictionary/dictionary_screen.dart';
 import 'package:arth/features/dictionary/word_screen.dart';
 import 'package:arth/features/epub/epub_reader_screen.dart';
 import 'package:arth/features/habit/reading_habit_screen.dart';
+import 'package:arth/features/idioms/idiom_practice_screen.dart';
+import 'package:arth/features/idioms/idiom_screen.dart';
+import 'package:arth/features/idioms/idioms_browse_screen.dart';
+import 'package:arth/features/idioms/idioms_screen.dart';
 import 'package:arth/features/library/library_screen.dart';
 import 'package:arth/features/plans/plans_screen.dart';
 import 'package:arth/features/reader/reader_screen.dart';
 import 'package:arth/features/scan/scan_reader_screen.dart';
 import 'package:arth/features/seed/seed_screen.dart';
 import 'package:arth/features/settings/settings_screen.dart';
+import 'package:arth/features/tools/coach_screen.dart';
+import 'package:arth/features/tools/coach_session.dart';
+import 'package:arth/features/tools/say_it_right_screen.dart';
+import 'package:arth/features/tools/spell_check_screen.dart';
+import 'package:arth/features/tools/tools_screen.dart';
+import 'package:arth/features/tools/translator_screen.dart';
 import 'package:arth/features/vocabulary/vocabulary_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +52,28 @@ GoRouter buildRouter({required bool needsSeed}) => GoRouter(
         GoRoute(path: '/plans', builder: (_, _) => const PlansScreen()),
         GoRoute(path: '/admin', builder: (_, _) => const AdminScreen()),
         GoRoute(path: '/community/deck/:id', builder: (_, s) => PublishedDeckScreen(id: s.pathParameters['id']!)),
+        GoRoute(path: '/idioms', builder: (_, _) => const IdiomsScreen()),
+        GoRoute(path: '/idioms/all', builder: (_, _) => const IdiomsBrowseScreen()),
+        GoRoute(path: '/idioms/saved', builder: (_, _) => const IdiomsBrowseScreen(savedOnly: true)),
+        GoRoute(path: '/idioms/practice', builder: (_, _) => const IdiomPracticeScreen()),
+        GoRoute(path: '/tools', builder: (_, _) => const ToolsScreen()),
+        GoRoute(path: '/tools/translate', builder: (_, _) => const TranslatorScreen()),
+        GoRoute(path: '/tools/spell', builder: (_, _) => const SpellCheckScreen()),
+        GoRoute(path: '/tools/say', builder: (_, _) => const SayItRightScreen()),
+        GoRoute(path: '/tools/coach', builder: (_, _) => const CoachPickScreen()),
+        GoRoute(
+          path: '/tools/coach/:scene',
+          builder: (_, state) => CoachCallScreen(
+            scene: CoachScene.values.firstWhere(
+              (s) => s.name == state.pathParameters['scene'],
+              orElse: () => CoachScene.introductions,
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/idiom/:phrase',
+          builder: (_, s) => IdiomScreen(phrase: Uri.decodeComponent(s.pathParameters['phrase']!)),
+        ),
         GoRoute(
           path: '/word/:lemma',
           builder: (_, s) => WordScreen(word: s.pathParameters['lemma']!),
@@ -104,7 +136,7 @@ class _Shell extends ConsumerWidget {
     final scale = ref.watch(settingsProvider).hindiScale;
     final items = [
       (Icons.menu_book_outlined, Icons.menu_book_rounded, t.tabLibrary),
-      (Icons.search_rounded, Icons.search_rounded, t.tabDictionary),
+      (Icons.build_outlined, Icons.build_rounded, t.tabTools),
       (Icons.style_outlined, Icons.style_rounded, t.tabCards),
       (Icons.forum_outlined, Icons.forum_rounded, t.tabCommunity),
       (Icons.person_outline_rounded, Icons.person_rounded, t.tabYou),
@@ -273,6 +305,7 @@ String? tabUnder(String location) {
   if (path.startsWith('/deck') || path.startsWith('/word')) return '/cards';
   if (path.startsWith('/community')) return '/community';
   if (path == '/plans' || path == '/profile' || path == '/admin' || path == '/about') return '/settings';
+  if (path.startsWith('/idiom')) return '/dictionary';
   return '/';
 }
 

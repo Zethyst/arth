@@ -282,7 +282,13 @@ ThemeData arthTheme(Brightness brightness) {
       shape: square,
       side: BorderSide(color: c.ink, width: 1.5),
       color: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? c.ink : c.card),
-      labelStyle: EnglishText.label(c.ink),
+      // A selected chip fills with ink, so its label has to turn over with it.
+      // secondaryLabelStyle does not do this: it is for a chip's second label,
+      // not its selected state, so the text stayed ink-on-ink and all that
+      // could be seen of a selected chip was the checkmark.
+      labelStyle: WidgetStateTextStyle.resolveWith(
+        (s) => EnglishText.label(s.contains(WidgetState.selected) ? c.paper : c.ink),
+      ),
       secondaryLabelStyle: EnglishText.label(c.paper),
       checkmarkColor: c.paper,
       surfaceTintColor: Colors.transparent,

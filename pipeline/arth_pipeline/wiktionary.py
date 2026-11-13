@@ -59,15 +59,72 @@ POS_HINDI: dict[str, str] = {
 
 # Sense tags that mean "this is a pointer to another entry, not a meaning".
 POINTER_TAGS: frozenset[str] = frozenset({"form-of", "alt-of"})
-# Senses we drop outright. Archaic/dated stay — 19th-century novels need them.
-DROP_SENSE_TAGS: frozenset[str] = frozenset(
-    {"obsolete", "misspelling", "vulgar", "offensive", "derogatory", "rare", "nonstandard", "humorous"}
-)
-# Stricter set for deciding whether a multi-word entry deserves to be a phrase at all,
-# and whether an inflection entry is trustworthy enough to feed lemma resolution.
+# Senses we drop outright. Only two reasons survive: the sense is not English
+# anyone writes any more, or the app would have to show it to a school student
+# beside an ad. Slang, informal, humorous, rare and nonstandard senses are kept
+# and labelled (REGISTER_LABELS) — a reader who meets "get" in a novel needs
+# the slang sense as much as the formal one, and not finding it is exactly the
+# complaint this set used to cause.
+DROP_SENSE_TAGS: frozenset[str] = frozenset({"obsolete", "misspelling", "vulgar", "offensive", "derogatory"})
+# Stricter set, and a different question: not "may a reader see this sense?"
+# but "may this entry be trusted to define a phrase, or to tell us that one
+# word is a form of another?". A slang spelling ("geaux → go") must never
+# steer lemma resolution, however happily we show the slang sense itself.
 RESTRICTED_TAGS: frozenset[str] = DROP_SENSE_TAGS | frozenset(
-    {"slang", "dialectal", "informal", "pronunciation-spelling", "eye-dialect", "abbreviation", "ellipsis"}
+    {
+        "rare",
+        "nonstandard",
+        "humorous",
+        "slang",
+        "dialectal",
+        "informal",
+        "pronunciation-spelling",
+        "eye-dialect",
+        "abbreviation",
+        "ellipsis",
+    }
 )
+
+# Wiktionary's label → how the app tells the reader, in Hindi. First match in
+# this order wins, so "slang" beats "informal" on a sense carrying both.
+REGISTER_LABELS: tuple[tuple[str, str], ...] = (
+    ("slang", "स्लैंग"),
+    ("vulgar", "अपशब्द"),
+    ("humorous", "मज़ाक़ में"),
+    ("informal", "अनौपचारिक"),
+    ("colloquial", "बोलचाल"),
+    ("formal", "औपचारिक"),
+    ("archaic", "पुराना"),
+    ("dated", "पुराना"),
+    ("historical", "पुराना"),
+    ("obsolete", "पुराना"),
+    ("poetic", "साहित्यिक"),
+    ("literary", "साहित्यिक"),
+    ("dialectal", "क्षेत्रीय"),
+    ("regional", "क्षेत्रीय"),
+    ("British", "ब्रिटिश"),
+    ("UK", "ब्रिटिश"),
+    ("American", "अमेरिकी"),
+    ("US", "अमेरिकी"),
+    ("nonstandard", "अमानक"),
+    ("rare", "कम प्रचलित"),
+)
+
+
+def sense_register(sense: dict[str, Any]) -> str:
+    """The Hindi register label for a sense, or "" for plain everyday English.
+
+    Taken from Wiktionary's own labels, never written by the model: a label is
+    a fact about the word, and asking an LLM to re-derive it would cost tokens
+    and invent some.
+    """
+    tags = set(sense.get("tags") or ())
+    for tag, label in REGISTER_LABELS:
+        if tag in tags:
+            return label
+    return ""
+
+
 DROP_GLOSS_PREFIXES: tuple[str, ...] = (
     "Alternative form of",
     "Alternative spelling of",

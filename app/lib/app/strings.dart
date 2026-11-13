@@ -22,7 +22,10 @@ enum AppStrings {
 
   // ---- tabs & titles ----
   String get tabLibrary => _('Library', 'किताबें');
-  String get tabDictionary => _('Dictionary', 'शब्दकोश');
+  // The tab leads to the dictionary screen, which carries word search and the
+  // idioms as well as the tools. Named for the tools: see [toolsTitle], which
+  // is the same word and the same string deliberately.
+  String get tabTools => toolsTitle;
   String get tabYou => _('You', 'आप');
   String get back => _('Back', 'पीछे');
   String get about => _('About Arth', 'Arth के बारे में');
@@ -139,6 +142,8 @@ enum AppStrings {
   String get synonyms => _('Synonyms', 'समानार्थी');
   String get antonyms => _('Antonyms', 'विलोम');
   String get forms => _('Forms', 'रूप');
+  String get phrasalVerbs => _('Phrasal verbs', 'क्रिया वाक्यांश');
+  String get idioms => _('Idioms and phrases', 'मुहावरे और वाक्यांश');
   String get listen => _('Listen', 'सुनें');
   String get save => _('Save word', 'शब्द सहेजें');
   String get saved => _('Saved', 'सहेजा गया');
@@ -146,8 +151,118 @@ enum AppStrings {
   String get didYouMean => _('Did you mean', 'क्या आपका मतलब था');
   String get attribution => _('Based on Wiktionary (CC BY-SA)', 'Wiktionary (CC BY-SA) के आधार पर');
 
+  // ---- idioms ----
+  String get idiomsTitle => _('Idioms', 'मुहावरे');
+  String get idiomsBlurb => _('English phrases that don’t mean what they say.', 'अंग्रेज़ी के वे वाक्यांश जिनका मतलब शब्दों से अलग होता है।');
+  String idiomsToday(int n) => _('Today’s $n', 'आज के $n');
+  String idiomsProgress(int at, int of) => _('$at of $of', '$of में से $at');
+  String get idiomsSeeAll => _('Browse all', 'सभी देखें');
+  String get idiomsPractice => _('Practice', 'अभ्यास');
+  String get idiomsSaved => _('Saved', 'सहेजे');
+
+  // ---- tools ----
+  String get toolsTitle => _('Tools', 'साधन');
+  String get seeAll => _('See all', 'सभी देखें');
+  String get toolsSubtitle =>
+      _('Say it, write it, check it — the other half of English.', 'बोलना, लिखना, जाँचना — अंग्रेज़ी का दूसरा आधा।');
+  String get translatorTitle => _('Translator', 'अनुवादक');
+  String get translatorHelp =>
+      _('Say it in Hindi, get natural English.', 'हिंदी में लिखिए, सहज अंग्रेज़ी पाइए।');
+  String get translatorHint => _('हिंदी में लिखिए…', 'हिंदी में लिखिए…');
+  String get translatorGo => _('Translate', 'अनुवाद करें');
+  String get spellCheckTitle => _('Spell check', 'वर्तनी जाँच');
+  String get spellCheckHelp =>
+      _('Fix spelling and grammar in what you wrote.', 'आपने जो लिखा उसकी वर्तनी और व्याकरण ठीक करें।');
+  String get spellCheckHint => _('Type or paste your English…', 'अपनी अंग्रेज़ी लिखें या चिपकाएँ…');
+  String get spellCheckGo => _('Check it', 'जाँचें');
+  String get spellCheckClean => _('No mistakes — this reads well.', 'कोई गलती नहीं — यह ठीक लिखा है।');
+  String get correctedVersion => _('Corrected', 'सुधरा हुआ');
+  String fixCount(int n) => n == 1 ? _('1 fix', '1 सुधार') : _('$n fixes', '$n सुधार');
+  String get sayItRightTitle => _('Say it right', 'सही बोलिए');
+  String get sayItRightHelp =>
+      _('Say a word out loud and see how close you got.', 'शब्द बोलिए और देखिए कितना सही बोला।');
+  String get tapToSpeak => _('Tap and say it', 'दबाकर बोलिए');
+  String get noWordsToPractise =>
+      _('Download the dictionary first, then there will be words to practise.', 'पहले शब्दकोश डाउनलोड करें, फिर अभ्यास के लिए शब्द होंगे।');
+  String get listening => _('Listening…', 'सुन रहे हैं…');
+  String get heardNothing => _('Nothing was heard. Try again.', 'कुछ सुनाई नहीं दिया। फिर कोशिश करें।');
+  String heardInstead(String word) => _('Heard: $word', 'सुना: $word');
+  String get sayAgain => _('Say it again', 'फिर बोलिए');
+  String get nextWord => _('Next word', 'अगला शब्द');
+  String get saidClear => _('Clear', 'साफ़');
+  String get saidNearly => _('Nearly', 'लगभग');
+  String get saidOff => _('Not yet', 'अभी नहीं');
+  String get micDenied =>
+      _('Arth needs the microphone to hear you. Turn it on in Settings.', 'सुनने के लिए Arth को माइक्रोफ़ोन चाहिए। सेटिंग्स में चालू करें।');
+  String get micUnavailable =>
+      _('This phone has no speech recognition for English.', 'इस फ़ोन में अंग्रेज़ी की वाक् पहचान नहीं है।');
+  String get otherWays => _('Other ways to say it', 'कहने के और तरीके');
+  String get worthLearning => _('Worth learning', 'सीखने लायक');
+  String get toneFormal => _('Formal', 'औपचारिक');
+  String get toneCasual => _('Casual', 'अनौपचारिक');
+  String get toneDirect => _('Direct', 'सीधा');
+  String get toneConcise => _('Short', 'संक्षिप्त');
+
+  // ---- speaking coach ----
+  String get coachTitle => _('Speaking practice', 'बोलने का अभ्यास');
+  String get coachHelp =>
+      _('Have a conversation out loud. You will be shown a better way to say it.', 'बोलकर बातचीत कीजिए। बेहतर कहने का तरीका दिखाया जाएगा।');
+  String get coachPick => _('What would you like to practise?', 'किसका अभ्यास करना है?');
+  String get sceneInterview => _('A job interview', 'नौकरी का इंटरव्यू');
+  String get sceneShop => _('Buying something', 'कुछ खरीदना');
+  String get sceneDoctor => _('At the doctor', 'डॉक्टर के पास');
+  String get sceneIntroductions => _('Meeting someone', 'किसी से मिलना');
+  String get coachStartTalking => _('Tap and speak', 'दबाकर बोलिए');
+  String get coachCheckHeard => _('Is this what you said?', 'क्या आपने यही कहा?');
+  String get coachSend => _('Send', 'भेजें');
+  String get coachRetry => _('Say it again', 'फिर बोलिए');
+  String get coachBetter => _('A better way to say it', 'कहने का बेहतर तरीका');
+  String get coachThinking => _('…', '…');
+  String get coachEnd => _('End', 'खत्म करें');
+  String get coachEnded => _('Conversation over', 'बातचीत खत्म');
+  String get coachSayAgain => _('Say these again', 'इन्हें फिर बोलिए');
+  String coachRepliesCount(int n) => n == 1 ? _('1 reply', '1 जवाब') : _('$n replies', '$n जवाब');
+  String coachPolishCount(int n) => n == 1 ? _('1 to polish', '1 सुधारना है') : _('$n to polish', '$n सुधारने हैं');
+  String get coachNothingToPolish => _('Nothing to polish — well said.', 'कुछ सुधारना नहीं — बढ़िया बोला।');
+  String get coachAgain => _('Practise again', 'फिर अभ्यास करें');
+
+  // ---- grammar and summary ----
+  String get grammarTitle => _('How this sentence works', 'यह वाक्य कैसे बना है');
+  String get grammarAction => _('Grammar', 'व्याकरण');
+  String get summaryTitle => _('What happened here', 'यहाँ क्या हुआ');
+  String get summaryAction => _('Summarise this page', 'इस पन्ने का सार');
+  String get summaryPeople => _('Who appears', 'कौन-कौन है');
+  String get summaryTooShort =>
+      _('There is not enough on this page to summarise.', 'इस पन्ने पर सार बनाने लायक सामग्री नहीं है।');
+  String get dailyIdiomTitle => _('Idiom of the day', 'आज का मुहावरा');
+  String dailyIdiomBody(String phrase, String meaning) => _('$phrase — $meaning', '$phrase — $meaning');
+  String get dailyIdiomSetting => _('An idiom every day', 'हर दिन एक मुहावरा');
+  String get dailyIdiomHelp =>
+      _('One idiom a day, from the ones already on your phone.', 'आपके फ़ोन पर मौजूद मुहावरों में से हर दिन एक।');
+  String get idiomsEmpty => _('Idioms arrive with the dictionary. Download it from the You tab.', 'मुहावरे शब्दकोश के साथ आते हैं। You टैब से उसे डाउनलोड करें।');
+  String get idiomTapToTurn => _('Tap to turn it over', 'पलटने के लिए दबाएँ');
+  String get idiomTapToTurnBack => _('Tap to turn back', 'वापस पलटें');
+  String get idiomDone => _('That’s today’s set.', 'आज के मुहावरे हो गए।');
+  String get idiomDoneBlurb => _('Come back tomorrow for ten more, or browse the rest now.', 'कल दस और; या अभी बाकी सब देखें।');
+  String get idiomSave => _('Save', 'सहेजें');
+  String get idiomSaved2 => _('Saved', 'सहेजा गया');
+  String get idiomSkip => _('Skip', 'छोड़ें');
+  String get idiomNext => _('Next', 'आगे');
+  String get idiomStory => _('The story behind it', 'इसके पीछे की कहानी');
+  String get idiomStoryNone => _('No story recorded for this one.', 'इसके बारे में कुछ दर्ज नहीं है।');
+  String get idiomInUse => _('In a sentence', 'वाक्य में');
+  String idiomCount(int n) => _('$n idioms', '$n मुहावरे');
+  String get practiceQuestion => _('Which meaning fits?', 'कौन-सा अर्थ सही है?');
+  String practiceScore(int right, int of) => _('$right of $of right', '$of में से $right सही');
+  String get practiceAgain => _('Practice again', 'फिर अभ्यास करें');
+  String get practiceTooFew => _('A few more idioms are needed before practice works.', 'अभ्यास के लिए अभी कुछ और मुहावरे चाहिए।');
+  String get practiceDone => _('Round finished', 'दौर पूरा');
+
   // ---- dictionary ----
-  String get dictionaryTitle => _('Dictionary', 'शब्दकोश');
+  /// The heading of the screen the Tools tab opens. It carries word search,
+  /// the idioms and the tools; it is named for the tab so that one surface
+  /// does not go by two names.
+  String get dictionaryTitle => toolsTitle;
   String get searchHint => _('Any English word', 'कोई अंग्रेज़ी शब्द');
   String get recent => _('Recent', 'हाल के');
   String get removeRecent => _('Remove from recent', 'हाल की खोज से हटाएँ');
@@ -347,10 +462,23 @@ enum AppStrings {
         'OFFLINE' => offline,
         'NOT_FOUND' => notFound,
         'RATE_LIMITED' => rateLimited,
-        'UNAVAILABLE' => _('This isn’t available yet. Try again later.', 'यह अभी उपलब्ध नहीं है। बाद में कोशिश करें।'),
+        'UNAVAILABLE' => notAvailableYet,
         'INTERNAL' || 'UPSTREAM_FAILED' => isHindi ? serverMessage : somethingWrong,
         _ => serverMessage,
       };
+
+  /// The same, for a whole feature rather than a word.
+  ///
+  /// A 404 from a word lookup means the dictionary does not have it; a 404
+  /// from a feature's own endpoint means the app is newer than the server and
+  /// the endpoint is not deployed yet. Telling a reader practising their
+  /// speaking that it is "not in the dictionary" sent us looking in the wrong
+  /// place for half an hour.
+  String errorForFeature(String code, String serverMessage) =>
+      code == 'NOT_FOUND' ? notAvailableYet : errorFor(code, serverMessage);
+
+  String get notAvailableYet =>
+      _('This isn’t available yet. Try again later.', 'यह अभी उपलब्ध नहीं है। बाद में कोशिश करें।');
 
   // ---- flashcards ----
   String get tabCards => _('Cards', 'कार्ड');
@@ -454,6 +582,19 @@ enum AppStrings {
   // ---- vocabulary ----
   String get vocabulary => _('Vocabulary', 'शब्द भंडार');
   String get wordsFromBook => _('Saved words from this book', 'इस किताब के सहेजे शब्द');
+  String get hardWords => _('Hard words on this page', 'इस पन्ने के कठिन शब्द');
+  String get hardWordsEmpty => _('Nothing unusual on this page — it is all everyday English.', 'इस पन्ने पर कुछ कठिन नहीं — सब रोज़मर्रा की अंग्रेज़ी है।');
+  String hardWordsFound(int n) => n == 1
+      ? _('1 word worth a look, rarest first.', 'देखने लायक 1 शब्द।')
+      : _('$n words worth a look, rarest first.', 'देखने लायक $n शब्द, सबसे कठिन पहले।');
+  String get tapToLookUp => _('Tap to look it up', 'अर्थ देखने के लिए दबाएँ');
+
+  // How rare a word on the page is, by its frequency rank. Everything in the
+  // list is already past the "advanced" threshold, so there is no common tier.
+  String get rarityRare => _('rare', 'कम प्रचलित');
+  String get rarityVeryRare => _('very rare', 'बहुत कम प्रचलित');
+  String get rarityRarest => _('rarest', 'अत्यंत दुर्लभ');
+  String get scanPageWords => _('Hard words on this page', 'इस पन्ने के कठिन शब्द');
   String get exportWordsPdf => _('Export words as PDF', 'शब्दों का PDF बनाएँ');
   String wordCount(int n) => _(n == 1 ? '1 word' : '$n words', '$n शब्द');
   String pdfWordsSubject(String book) => _('My words from $book', '$book से मेरे शब्द');
@@ -602,6 +743,12 @@ enum AppStrings {
   String get purchaseFailed => _('The purchase didn’t go through. You haven’t been charged; try again.', 'ख़रीद पूरी नहीं हुई। आपसे पैसे नहीं लिए गए; फिर कोशिश करें।');
   String get signInToBuy => _('Sign in first, so your plan stays with your account on every phone.', 'पहले साइन इन करें, ताकि आपका प्लान हर फ़ोन पर आपके खाते के साथ रहे।');
   String get plansUnavailable => _('Plans can’t be loaded right now. Check your connection and try again.', 'प्लान अभी लोड नहीं हो पा रहे। इंटरनेट देखें और फिर कोशिश करें।');
+  String get haveCoupon => _('Have a discount code?', 'छूट का कोड है?');
+  String get couponCode => _('Discount code', 'छूट का कोड');
+  String get couponApply => _('Apply', 'लगाएँ');
+  String get couponRemove => _('Remove the code', 'कोड हटाएँ');
+  String get couponApplied => _('Code applied', 'कोड लगा');
+  String get couponNoOffer => _('This code is good, but its offer isn’t in the store yet. Try again in a little while.', 'यह कोड सही है, पर इसकी छूट अभी स्टोर में नहीं पहुँची। थोड़ी देर बाद फिर कोशिश करें।');
   String get planOfflineDictionary => _('Offline dictionary, flashcards, sync', 'ऑफ़लाइन शब्दकोश, फ़्लैशकार्ड, सिंक');
   String get planAds => _('Ads outside the reader', 'रीडर के बाहर विज्ञापन');
   String get planNoAds => _('No ads', 'कोई विज्ञापन नहीं');

@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/coach-turn.json",
+  "title": "CoachTurn",
+  "description": "One turn of a spoken practice conversation: what the coach says back, and — when the learner's own sentence needed it — a better way to have said it. The correction is the point of the exercise; the conversation is what makes a learner produce a sentence at all.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reply", "replyHindi"],
+  "properties": {
+    "reply": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the coach says next, in English. One or two sentences — a learner cannot hold a paragraph said aloud."
+    },
+    "replyHindi": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The same, in Hindi, shown under it. A learner who missed the English can still carry on."
+    },
+    "better": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "why"],
+      "description": "A better way to say what the learner just said. Absent when their sentence was already fine — most turns should not have one.",
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "description": "Their sentence, put right, keeping their meaning." },
+        "why": { "type": "string", "minLength": 1, "description": "The rule, in one line of Hindi." }
+      }
+    },
+    "closing": {
+      "type": "boolean",
+      "description": "True when the conversation has reached a natural end, so the app can offer to finish."
+    }
+  }
+}

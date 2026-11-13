@@ -6,6 +6,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/local_store.dart';
 import 'package:arth/features/plans/ai_prompt.dart';
+import 'package:arth/features/reader/grammar_sheet.dart';
 import 'package:arth/features/reader/highlights/highlight_bar.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:flutter/material.dart';
@@ -153,22 +154,29 @@ class SentenceTooltip extends ConsumerWidget {
             show: (state.difficultWords ?? const []).isNotEmpty,
           ),
         ],
-        if (onMakeCard != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Row(
-              children: [
-                const Spacer(),
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Row(
+            children: [
+              // The translation says what it means; this says how it works.
+              TextButton.icon(
+                onPressed: () => showGrammarSheet(context, text: state.text),
+                style: TextButton.styleFrom(foregroundColor: c.accent, visualDensity: VisualDensity.compact),
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+                label: Text(t.grammarAction, style: label(c.accent)),
+              ),
+              const Spacer(),
+              if (onMakeCard != null)
                 TextButton.icon(
-                    // The quote's back is the translation: wait for it.
-                    onPressed: state.done ? onMakeCard : null,
-                    style: TextButton.styleFrom(foregroundColor: c.accent, visualDensity: VisualDensity.compact),
-                    icon: const Icon(Icons.style_outlined, size: 18),
-                    label: Text(t.makeCard, style: label(state.done ? c.accent : c.inkMuted)),
-                  ),
-              ],
-            ),
+                  // The quote's back is the translation: wait for it.
+                  onPressed: state.done ? onMakeCard : null,
+                  style: TextButton.styleFrom(foregroundColor: c.accent, visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.style_outlined, size: 18),
+                  label: Text(t.makeCard, style: label(state.done ? c.accent : c.inkMuted)),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }

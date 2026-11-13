@@ -169,7 +169,12 @@ def parse_generation(extract: dict[str, Any], content: str) -> DictionaryEntry:
             "word": extract["word"],
             "ipa": extract.get("ipa", ""),
             "hindiPronunciation": gen.hindiPronunciation,
-            "senses": [s.model_dump() for s in gen.senses],
+            # The register is Wiktionary's label, carried straight through:
+            # the model is never asked for it, so it can never invent one.
+            "senses": [
+                {**s.model_dump(), "styleLabel": exp.get("styleLabel", "")}
+                for s, exp in zip(gen.senses, want, strict=False)
+            ],
             "synonyms": [p.model_dump() for p in gen.synonyms],
             "antonyms": [p.model_dump() for p in gen.antonyms],
             "forms": [f.model_dump() for f in gen.forms],
