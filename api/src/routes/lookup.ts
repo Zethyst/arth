@@ -1,12 +1,13 @@
+import { createHash } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { ApiError, messages } from '../lib/errors.js';
 import { ok } from '../lib/envelope.js';
 import { schemas } from '../contracts.js';
 import { resolveLemma, resolveLemmaKey } from '../services/lemma.js';
-import { generateOnDemand, morphologySuggestions, type OnDemandDeps } from '../services/ondemand.js';
+import { generateOnDemand, generateUnknown, isCoinable, morphologySuggestions, type OnDemandDeps } from '../services/ondemand.js';
 import type { Store } from '../services/mongo-store.js';
-import { cacheStats } from '../cache/cache.js';
+import { cacheStats, type CacheStore } from '../cache/cache.js';
 import { openGate, type AiGate } from '../auth/ai-gate.js';
 
 const Query = z.object({
@@ -21,9 +22,19 @@ export type LookupOptions = {
   };
   /** Generating an entry is an AI use; looking up an existing one isn't. */
   gate?: AiGate;
+  /** Remembers the words the model declined, so a second tap is free. */
+  cache?: CacheStore;
 };
 
-export const lookupRoutes: FastifyPluginAsync<LookupOptions> = async (app, { store, ondemand, gate = openGate }) => {
+/**
+ * A word the model said it does not know. Kept for ever, like every other
+ * cache entry: the verdict is about the word, not about the day. Load the
+ * word properly through the pipeline and the entry wins — this is only
+ * consulted after `entries` and `staged` have both missed.
+ */
+const declinedKey = (word: string) => createHash('sha256').update(`unknown:${word}`, 'utf8').digest('hex');
+
+export const lookupRoutes: FastifyPluginAsync<LookupOptions> = async (app, { store, ondemand, gate = openGate, cache }) => {
   app.get(
     '/lookup',
     {
@@ -48,35 +59,48 @@ export const lookupRoutes: FastifyPluginAsync<LookupOptions> = async (app, { sto
         return ok(resolved.entry);
       }
 
-      // Not generated yet: a staged Wiktionary lemma gets its Hindi layer now.
+      const key = word.toLowerCase();
+
+      // Not generated yet. A staged Wiktionary lemma gets its Hindi layer now;
+      // a word-shaped token nothing has staged — the compounds, the derived
+      // words, the Indian English — gets written from scratch, which is the
+      // only answer a reader of `decision-making` was ever going to get.
       if (ondemand) {
         const stagedLemma = await resolveLemmaKey(
           async (k) => (await store.findStaged(k)) !== null,
           (f) => store.findFormLemma(f),
           word,
         );
-        if (stagedLemma) {
+        // A token the model has already turned down is not worth asking
+        // about a second time, for us or for the reader's allowance.
+        const coinable = stagedLemma === null && isCoinable(key);
+        const declined = coinable && (await cache?.get<true>(declinedKey(key))) === true;
+        if (stagedLemma !== null || (coinable && !declined)) {
+          const lemma = stagedLemma ?? key;
+          const deps = { ...ondemand, staging: store, spend: () => ondemand.spend(request) };
           const use = await gate(request, reply);
           try {
-            const out = await generateOnDemand({ ...ondemand, staging: store, spend: () => ondemand.spend(request) }, stagedLemma);
-            if (!out) await use?.refund();
-            if (out) {
+            const out = stagedLemma !== null ? await generateOnDemand(deps, stagedLemma) : await generateUnknown(deps, key);
+            if (out?.entry) {
               cacheStats.misses++;
-              request.meta.lookup = { word, lemma: stagedLemma, via: 'generated' };
+              request.meta.lookup = { word, lemma: out.entry.word, via: stagedLemma !== null ? 'generated' : 'coined' };
               request.meta.tokens = out.usage;
               request.meta.model = out.model;
               return ok(out.entry);
             }
+            // Either the lemma stopped being staged under us, or the model
+            // does not know the token. Nothing was served, so nothing is owed.
+            await use?.refund();
+            if (out && stagedLemma === null) await cache?.set(declinedKey(key), 'unknown', true);
           } catch (err) {
             await use?.refund();
             if (err instanceof ApiError) throw err;
-            request.log.error({ err, lemma: stagedLemma }, 'ondemand generation failed');
+            request.log.error({ err, lemma }, 'ondemand generation failed');
           }
         }
       }
 
       // Genuinely unknown (or generation failed): offer bases the reader can open.
-      const key = word.toLowerCase();
       const exists = async (c: string) =>
         (await resolveLemma(store, c)) !== null || (await store.findStaged(c)) !== null;
       const suggestions = await morphologySuggestions(key, exists);

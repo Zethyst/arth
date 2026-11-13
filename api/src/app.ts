@@ -199,6 +199,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
           store: opts.store,
           ondemand: { config: opts.config, llm: opts.llm, log, spend },
           gate,
+          cache: opts.cache,
         });
         await dbRoutes.register(phraseRoutes, { store: opts.store });
         await dbRoutes.register(coverRoutes, { cache: opts.cache, ...(opts.coverFetch ? { fetchJson: opts.coverFetch } : {}) });

@@ -1,7 +1,7 @@
 /** Content-hash cache over the `cache` collection. No TTL: books don't change. */
 import { CacheModel } from '../db/models/index.js';
 
-export type CacheKind = 'context' | 'sentence' | 'context-index' | 'cover' | 'grammar' | 'summary' | 'english' | 'proofread' | 'coach';
+export type CacheKind = 'context' | 'sentence' | 'context-index' | 'cover' | 'grammar' | 'summary' | 'english' | 'proofread' | 'coach' | 'unknown';
 
 export interface CacheStore {
   get<T>(key: string): Promise<T | null>;

@@ -37,7 +37,7 @@ const entrySchema = new Schema(
     forms: { type: [form], default: [] },
     isPhrase: { type: Boolean, default: false },
     freqRank: { type: Number, required: true },
-    tier: { type: String, enum: ['top', 'tail', 'ondemand'], required: false },
+    tier: { type: String, enum: ['top', 'tail', 'ondemand', 'coined'], required: false },
     model: { type: String },
     updatedAt: { type: Date, default: () => new Date() },
   },

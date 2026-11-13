@@ -2,7 +2,7 @@ import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from '../src/app.js';
 import { promptExamples, validate, type WiktionaryExtract } from '../src/contracts.js';
-import { morphologySuggestions, parseGeneration } from '../src/services/ondemand.js';
+import { isCoinable, morphologySuggestions, parseGeneration, parseUnknown } from '../src/services/ondemand.js';
 import { appOptions, FakeLLM } from './fakes.js';
 
 // The gold example for "fortune" is exactly what 08_stage.py stores, and its
@@ -114,5 +114,121 @@ describe('morphologySuggestions', () => {
     assert.deepEqual(await morphologySuggestions('brimless', exists), ['brim']);
     assert.deepEqual(await morphologySuggestions('unkindness', exists), ['kind']);
     assert.deepEqual(await morphologySuggestions('xyzzy', exists), []);
+  });
+});
+
+// ---- Words nothing has staged: the model writes the whole entry. ----
+
+const coined = {
+  ipa: 'dɪˈsɪʒənˌmeɪkɪŋ',
+  hindiPronunciation: 'डिसिज़न-मेकिंग',
+  senses: [
+    {
+      index: 0,
+      partOfSpeech: 'संज्ञा',
+      meaning: 'निर्णय लेना',
+      definition: 'किसी बात पर सोच-समझकर फ़ैसला करने का काम।',
+      examples: [{ en: 'Decision-making takes time.', hi: 'फ़ैसला करने में समय लगता है।' }],
+    },
+  ],
+  synonyms: [{ en: 'judgement', hi: 'फ़ैसला' }],
+  antonyms: [],
+  forms: [],
+};
+const declined = { ipa: '', hindiPronunciation: '', senses: [], synonyms: [], antonyms: [], forms: [] };
+
+describe('parseUnknown', () => {
+  test('builds a whole DictionaryEntry out of the model’s answer', () => {
+    const r = parseUnknown('decision-making', JSON.stringify(coined));
+    assert.ok(r.ok);
+    if (r.ok && r.value) {
+      assert.equal(r.value.word, 'decision-making');
+      assert.equal(r.value.isPhrase, false, 'a hyphen is not a space');
+      assert.equal(r.value.ipa, coined.ipa);
+      assert.ok(validate.dictionaryEntry(r.value));
+    }
+  });
+
+  test('an empty senses array is "I don’t know it", not an error', () => {
+    const r = parseUnknown('mehtras', JSON.stringify(declined));
+    assert.ok(r.ok);
+    assert.equal(r.ok && r.value, null);
+  });
+
+  test('rejects English in Hindi prose, a misnumbered sense, a nameless synonym', () => {
+    const english = structuredClone(coined);
+    english.senses[0]!.definition = 'फ़ैसला करने का process।';
+    assert.match((parseUnknown('x', JSON.stringify(english)) as { error: string }).error, /English word/);
+    const renumbered = structuredClone(coined);
+    renumbered.senses[0]!.index = 1;
+    assert.match((parseUnknown('x', JSON.stringify(renumbered)) as { error: string }).error, /expected 0/);
+    const syn = structuredClone(coined);
+    syn.synonyms[0]!.en = ' ';
+    assert.match((parseUnknown('x', JSON.stringify(syn)) as { error: string }).error, /synonyms\[0\]\.en/);
+    assert.match((parseUnknown('x', '{') as { error: string }).error, /not JSON/);
+  });
+});
+
+describe('isCoinable', () => {
+  test('keeps compounds and contractions, turns away what a thumb hit by mistake', () => {
+    for (const w of ['decision-making', 'rank-and-file', "o'clock", 'unrepentantly', 'Prepone']) {
+      assert.equal(isCoinable(w), true, w);
+    }
+    for (const w of ['xiv', 'p-3', '1984', 'e.g.', 'th', 'word-', '', 'two words']) {
+      assert.equal(isCoinable(w), false, w);
+    }
+  });
+});
+
+describe('GET /v1/lookup with nothing staged', () => {
+  test('writes the entry, serves it, and never pays for it again', async () => {
+    const llm = new FakeLLM({ unknown_entry: [JSON.stringify(coined)] });
+    const app = buildApp(appOptions(llm));
+    after(() => app.close());
+
+    const r1 = await app.inject({ method: 'GET', url: '/v1/lookup?word=decision-making' });
+    assert.equal(r1.statusCode, 200);
+    assert.equal(r1.json().data.word, 'decision-making');
+    assert.equal(r1.json().data.senses[0].meaning, 'निर्णय लेना');
+    assert.ok(validate.dictionaryEntry(r1.json().data));
+    assert.equal(llm.requests.length, 1);
+    assert.equal(llm.requests[0]!.schemaName, 'unknown_entry');
+    assert.equal(JSON.parse(llm.requests[0]!.messages.at(-1)!.content).word, 'decision-making');
+
+    const r2 = await app.inject({ method: 'GET', url: '/v1/lookup?word=Decision-Making' });
+    assert.equal(r2.statusCode, 200);
+    assert.equal(llm.requests.length, 1, 'the second reader reads it out of entries');
+  });
+
+  test('a token the model declines is a plain 404, asked about only once', async () => {
+    const llm = new FakeLLM({ unknown_entry: [JSON.stringify(declined)] });
+    const app = buildApp(appOptions(llm));
+    after(() => app.close());
+
+    const r1 = await app.inject({ method: 'GET', url: '/v1/lookup?word=mehtras' });
+    assert.equal(r1.statusCode, 404);
+    assert.equal(r1.json().error.code, 'NOT_FOUND');
+
+    const r2 = await app.inject({ method: 'GET', url: '/v1/lookup?word=mehtras' });
+    assert.equal(r2.statusCode, 404);
+    assert.equal(llm.requests.length, 1, 'the refusal is remembered');
+  });
+
+  test('a token that is not word-shaped costs nothing to refuse', async () => {
+    const llm = new FakeLLM({});
+    const app = buildApp(appOptions(llm));
+    after(() => app.close());
+    const r = await app.inject({ method: 'GET', url: '/v1/lookup?word=xiv' });
+    assert.equal(r.statusCode, 404);
+    assert.equal(llm.requests.length, 0);
+  });
+
+  test('a staged lemma still goes the staged way', async () => {
+    const llm = new FakeLLM({ entry_generation: [good] });
+    const app = buildApp(appOptions(llm, {}, { tremulous: { ...extract, word: 'tremulous' } }));
+    after(() => app.close());
+    const r = await app.inject({ method: 'GET', url: '/v1/lookup?word=tremulous' });
+    assert.equal(r.statusCode, 200);
+    assert.equal(llm.requests[0]!.schemaName, 'entry_generation');
   });
 });

@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://arth.app/contracts/unknown-entry.json",
+  "title": "UnknownEntry",
+  "description": "What the LLM returns for a word the dictionary has never heard of — a compound like `decision-making`, a derived word Wiktionary never staged, an Indian-English usage. Unlike EntryGeneration there is no Wiktionary extract to translate: the model writes the senses as well as the Hindi, and `ipa` with them. An empty `senses` array is the model saying it does not recognise the token (a name, a scanning error, another language); the route turns that into the ordinary 404 and charges nothing. Definitions are duplicated from dictionary-entry.json (not $ref'd across files) because OpenAI strict mode needs a self-contained schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ipa", "hindiPronunciation", "senses", "synonyms", "antonyms", "forms"],
+  "properties": {
+    "ipa": { "type": "string", "description": "IPA transcription without surrounding slashes. Empty string when unsure." },
+    "hindiPronunciation": { "type": "string", "description": "Devanagari transliteration of the English pronunciation, e.g. फ़ॉर्चून. Empty only when `senses` is empty." },
+    "senses": { "type": "array", "maxItems": 4, "items": { "$ref": "#/definitions/Sense" }, "description": "Commonest first. Empty means the model does not recognise the token." },
+    "synonyms": { "type": "array", "maxItems": 4, "items": { "$ref": "#/definitions/BilingualPair" } },
+    "antonyms": { "type": "array", "maxItems": 4, "items": { "$ref": "#/definitions/BilingualPair" } },
+    "forms": { "type": "array", "maxItems": 6, "items": { "$ref": "#/definitions/Form" } }
+  },
+  "definitions": {
+    "Sense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "partOfSpeech", "meaning", "definition", "examples"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "partOfSpeech": { "type": "string" },
+        "meaning": { "type": "string", "minLength": 1 },
+        "definition": { "type": "string", "minLength": 1 },
+        "examples": { "type": "array", "maxItems": 2, "items": { "$ref": "#/definitions/BilingualPair" } }
+      }
+    },
+    "BilingualPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "hi"],
+      "properties": { "en": { "type": "string" }, "hi": { "type": "string" } }
+    },
+    "Form": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "label", "hi"],
+      "properties": { "en": { "type": "string", "minLength": 1 }, "label": { "type": "string" }, "hi": { "type": "string" } }
+    }
+  }
+}

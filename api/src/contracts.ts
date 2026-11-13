@@ -39,6 +39,7 @@ export const schemas = {
   contextResult: load("context-result.json"),
   contextIndex: load("context-index.json"),
   entryGeneration: load("entry-generation.json"),
+  unknownEntry: load("unknown-entry.json"),
   translationResult: load("translation-result.json"),
   phraseMatch: load("phrase-match.json"),
   relatedPhrase: load("related-phrase.json"),
@@ -57,6 +58,7 @@ export function promptText(
     | "context-system"
     | "translate-system"
     | "entry-system"
+    | "unknown-system"
     | "grammar-system"
     | "summary-system"
     | "english-system"
@@ -151,6 +153,7 @@ export const validate = {
   contextResult: compile<ContextResult>("contextResult"),
   contextIndex: compile<{ senseIndex: number }>("contextIndex"),
   entryGeneration: compile<EntryGeneration>("entryGeneration"),
+  unknownEntry: compile<UnknownEntry>("unknownEntry"),
   translationResult: compile<TranslationResult>("translationResult"),
   phraseMatch: compile<PhraseMatch>("phraseMatch"),
   idiom: compile<Idiom>("idiom"),
@@ -276,6 +279,20 @@ export type RelatedPhrase = {
 
 /** The model's output for one headword: the Hindi layer only (contracts/schemas/entry-generation.json). */
 export type EntryGeneration = {
+  hindiPronunciation: string;
+  senses: Sense[];
+  synonyms: BilingualPair[];
+  antonyms: BilingualPair[];
+  forms: Form[];
+};
+
+/**
+ * The model's whole entry for a word nothing has staged — senses included
+ * (contracts/schemas/unknown-entry.json). Empty `senses` is "I don't know
+ * this token", which is a legitimate answer and the common one.
+ */
+export type UnknownEntry = {
+  ipa: string;
   hindiPronunciation: string;
   senses: Sense[];
   synonyms: BilingualPair[];

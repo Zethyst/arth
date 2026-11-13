@@ -3,7 +3,7 @@ import type { DictionaryEntry, WiktionaryExtract } from '../contracts.js';
 import type { LemmaStore } from './lemma.js';
 import type { PhraseStore } from './phrases.js';
 import type { SenseNotesStore } from './context.js';
-import type { StagingStore } from './ondemand.js';
+import type { EntryTier, StagingStore } from './ondemand.js';
 import type { RelatedPhraseStore } from './related-phrases.js';
 import { escapeRegExp } from '../lib/regex.js';
 
@@ -58,10 +58,10 @@ export const mongoStore: Store = {
     const doc = await WiktionaryModel.findById(lemma).lean();
     return doc ? { extract: doc.extract as WiktionaryExtract, freqRank: doc.freqRank } : null;
   },
-  async saveGenerated(entry: DictionaryEntry, meta: { freqRank: number; model: string }) {
+  async saveGenerated(entry: DictionaryEntry, meta: { freqRank: number; model: string; tier: EntryTier }) {
     await EntryModel.updateOne(
       { _id: entry.word },
-      { $set: { ...entry, freqRank: meta.freqRank, tier: 'ondemand', model: meta.model, updatedAt: new Date() } },
+      { $set: { ...entry, freqRank: meta.freqRank, tier: meta.tier, model: meta.model, updatedAt: new Date() } },
       { upsert: true },
     );
   },

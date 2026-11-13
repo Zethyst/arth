@@ -146,9 +146,27 @@ no Apple-Silicon simulator slice — test scans on a device.
 generated 23k — the whole `wordfreq` list plus every attested Wiktionary headword — into the
 `wiktionary` collection. When `/v1/lookup` misses `entries` but the lemma is staged, the API
 generates its Hindi layer live with the pipeline's prompt and validation, stores it in
-`entries` for good and returns it (3–7 s the first time, instant after). A word that isn't
-staged either gets a 404 whose `suggestions` are morphological bases (`brimlessness` →
-`brimless`, `brim`). Generation spends the per-device LLM budget like any model call.
+`entries` for good and returns it (3–7 s the first time, instant after).
+
+Under that sits a second fallback, for the words no word list ever had: hyphenated and open
+compounds (`decision-making`, `rank-and-file`), derived words (`unrepentantly`), terms of
+trade, Indian English (`prepone`, `eve-teasing`). Nothing is staged for them, so there are no
+senses to translate — the model writes the senses as well as the Hindi, against
+`contracts/prompts/unknown-system.md`, and the entry is filed under `tier: 'coined'` with a
+`freqRank` past every real one so it is served by `/lookup` but downloaded by no phone.
+
+That prompt's first instruction is to return **no senses at all** for anything it does not
+recognise — a name, a scanning error (`rnoming`), another language — because a reader is far
+better served by "not in the dictionary" than by an invented meaning. Measured against
+gpt-5.6-luna: `keith`, `teh` and `mehtras` are declined in ~1 s; `decision-making`,
+`stoichiometry` and `eve-teasing` are written in ~4 s. A declined word is remembered in the
+`cache` collection, so the second reader to tap it pays nothing, and the reader's AI use is
+refunded. Tokens that aren't word-shaped (digits, dots, under four letters) never reach the
+model at all.
+
+A word that both paths give up on gets a 404 whose `suggestions` are morphological bases
+(`brimlessness` → `brimless`, `brim`). Generation spends the per-device LLM budget like any
+model call.
 
 ## How many meanings a word gets
 
