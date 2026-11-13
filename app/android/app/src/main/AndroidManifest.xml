@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Say It Right listens to the reader and scores what it heard. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- RECORD_AUDIO implies a *required* microphone, which would hide Arth
+         from any phone that has none. Arth is a dictionary first: the two
+         features that listen already tell the reader when the phone cannot
+         (see micUnavailable), so the rest of the app is no reason to exclude
+         the device. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <application
         android:usesCleartextTraffic="true"
         android:label="Arth"
