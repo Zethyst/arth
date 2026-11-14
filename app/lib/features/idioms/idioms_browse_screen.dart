@@ -63,6 +63,9 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
       savedOnly: _savedOnly,
       kind: _phrasalOnly ? IdiomKind.phrasal : null,
     );
+    /// Nothing typed and nothing filtered: the order is worth naming, since
+    /// "7,329 idioms" otherwise looks like an arbitrary heap.
+    final plain = _controller.text.isEmpty && !_savedOnly && !_phrasalOnly;
     return Scaffold(
       appBar: AppBar(title: Text(t.idiomsTitle)),
       body: Column(
@@ -72,11 +75,24 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
             child: TextField(
               controller: _controller,
               onChanged: (_) => setState(() {}),
+              textInputAction: TextInputAction.search,
               style: EnglishText.body(c.ink, size: 16),
               decoration: InputDecoration(
                 isDense: true,
                 prefixIcon: const Icon(Icons.search_rounded),
-                hintText: t.idiomsTitle,
+                // "Idioms" under the word Idioms said nothing. The search
+                // reads both languages, and nothing on screen admitted it.
+                hintText: t.idiomsSearchHint,
+                suffixIcon: _controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: t.idiomsClearSearch,
+                        icon: const Icon(Icons.close_rounded, size: 20),
+                        onPressed: () {
+                          _controller.clear();
+                          setState(() {});
+                        },
+                      ),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -85,8 +101,17 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Text(t.idiomCount(shown.length), style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13)),
-                const Spacer(),
+                // Expanded, not a Spacer: in Hindi the two chips are wider
+                // than the row, and the count is what should give ground.
+                Expanded(
+                  child: Text(
+                    plain ? '${t.idiomCount(shown.length)} · ${t.idiomsBestKnownFirst}' : t.idiomCount(shown.length),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 // The label colour is said here, not left to the chip theme:
                 // Material resolved it to paper on an unselected (card-filled)
                 // chip, which is white text on a white chip.
@@ -117,6 +142,7 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
                     ),
                   )
                 : ListView.builder(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     itemCount: shown.length,
                     itemBuilder: (_, i) => IdiomTile(
                       idiom: shown[i],

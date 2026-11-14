@@ -7,10 +7,13 @@
 // book to take that colour from, so it takes one from the phrase itself, the
 // way a deck takes one from its title.
 
+import 'dart:async';
+
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/local_store.dart';
 import 'package:arth/features/cards/card_face.dart';
+import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:arth/features/library/book_cover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -167,7 +170,13 @@ class IdiomTagRow extends ConsumerWidget {
   }
 }
 
-/// One idiom in a list: the phrase, its Hindi meaning, and whether it's kept.
+/// One idiom in a list: the phrase, its Hindi meaning, and the heart that
+/// keeps it.
+///
+/// The heart is a button, not a badge. Keeping an idiom used to mean opening
+/// it first, which left the right half of every row empty and the Saved
+/// filter two taps away from the list it filters. The rule beneath is what
+/// makes seven thousand of these scannable at all.
 class IdiomTile extends ConsumerWidget {
   const IdiomTile({required this.idiom, required this.onTap, super.key});
 
@@ -177,15 +186,46 @@ class IdiomTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
+    final t = ref.watch(stringsProvider);
     final h = HindiText(ref.watch(settingsProvider).hindiScale);
-    return ListTile(
-      onTap: onTap,
-      title: Text(idiom.phrase, style: EnglishText.body(c.ink, size: 17)),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 2),
-        child: Text(idiom.meaning, style: h.small(c.inkMuted)),
-      ),
-      trailing: idiom.saved ? Icon(Icons.favorite_rounded, size: 18, color: c.accent) : null,
+    final saved = idiom.saved;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(idiom.phrase, style: EnglishText.body(c.ink, size: 17)),
+                      const SizedBox(height: 2),
+                      Text(idiom.meaning, style: h.small(c.inkMuted)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: saved ? t.unsave : t.idiomKeep,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    size: 20,
+                    color: saved ? c.accent : c.rule,
+                  ),
+                  onPressed: () => unawaited(
+                    ref.read(idiomsProvider.notifier).setSaved(idiom.phrase, saved: !saved),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Divider(height: 1, thickness: 1, indent: 16, endIndent: 16, color: c.rule.withValues(alpha: 0.4)),
+      ],
     );
   }
 }

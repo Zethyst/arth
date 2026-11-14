@@ -239,6 +239,10 @@ enum AppStrings {
   String get dailyIdiomSetting => _('An idiom every day', 'हर दिन एक मुहावरा');
   String get dailyIdiomHelp =>
       _('One idiom a day, from the ones already on your phone.', 'आपके फ़ोन पर मौजूद मुहावरों में से हर दिन एक।');
+  String get idiomsClearSearch => _('Clear', 'मिटाएँ');
+  String get idiomsSearchHint => _('Search in English or Hindi', 'अंग्रेज़ी या हिंदी में खोजें');
+  String get idiomsBestKnownFirst => _('best known first', 'सबसे प्रचलित पहले');
+  String get idiomKeep => _('Keep this idiom', 'यह मुहावरा सहेजें');
   String get idiomsEmpty => _('Idioms arrive with the dictionary. Check for an update in the You tab.', 'मुहावरे शब्दकोश के साथ आते हैं। आप टैब में अपडेट देखें।');
   String get idiomTapToTurn => _('Tap to turn it over', 'पलटने के लिए दबाएँ');
   String get idiomTapToTurnBack => _('Tap to turn back', 'वापस पलटें');
