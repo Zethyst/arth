@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:arth/app/feel.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
+import 'package:arth/data/local_store.dart';
 import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:arth/features/idioms/idiom_selection.dart';
 import 'package:flutter/material.dart';
@@ -158,6 +159,10 @@ class _IdiomPracticeScreenState extends ConsumerState<IdiomPracticeScreen> {
                         onTap: () => unawaited(_answer(q, i)),
                       ),
                     ),
+                  // The screen was blank below the options once answered, at
+                  // the one moment the reader is looking hardest. A sentence
+                  // using the idiom is what they came for.
+                  if (_picked != null) _Example(idiom: q.idiom, hindi: h),
                 ],
               ),
             ),
@@ -187,11 +192,14 @@ class _Option extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final (border, fill) = switch (state) {
-      _OptionState.open => (c.ink, Colors.transparent),
-      _OptionState.right => (c.accent, c.accent.withValues(alpha: 0.14)),
-      _OptionState.wrong => (c.ink, c.inkMuted.withValues(alpha: 0.12)),
-      _OptionState.dimmed => (c.rule, Colors.transparent),
+    // Green for the answer, lac red for the miss. It used to be the other way
+    // round — the correct answer wore the app's red and the wrong one a
+    // neutral grey, so a right answer looked like a mistake.
+    final (border, fill, mark) = switch (state) {
+      _OptionState.open => (c.ink, Colors.transparent, c.accent),
+      _OptionState.right => (c.good, c.good.withValues(alpha: 0.14), c.good),
+      _OptionState.wrong => (c.accent, c.accent.withValues(alpha: 0.12), c.accent),
+      _OptionState.dimmed => (c.rule, Colors.transparent, c.rule),
     };
     return InkWell(
       onTap: state == _OptionState.open ? onTap : null,
@@ -201,11 +209,48 @@ class _Option extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: EnglishText.label(state == _OptionState.dimmed ? c.rule : c.accent)),
+            Text(label, style: EnglishText.label(mark)),
             const SizedBox(width: 14),
-            Expanded(child: Text(text, style: style)),
-            if (state == _OptionState.right) Icon(Icons.check_rounded, color: c.accent),
-            if (state == _OptionState.wrong) Icon(Icons.close_rounded, color: c.inkMuted),
+            Expanded(
+              child: Text(text, style: state == _OptionState.dimmed ? style.copyWith(color: c.inkMuted) : style),
+            ),
+            if (state == _OptionState.right) Icon(Icons.check_rounded, color: c.good),
+            if (state == _OptionState.wrong) Icon(Icons.close_rounded, color: c.accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The idiom in a sentence, shown once the question has been answered. Its
+/// own sense's example, so it matches the meaning that was just the answer;
+/// nothing at all when that sense never had one.
+class _Example extends StatelessWidget {
+  const _Example({required this.idiom, required this.hindi});
+
+  final IdiomRow idiom;
+  final HindiText hindi;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final senses = idiom.entry.senses;
+    if (idiom.senseIndex < 0 || idiom.senseIndex >= senses.length) return const SizedBox.shrink();
+    final example = senses[idiom.senseIndex].examples.firstOrNull;
+    if (example == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        decoration: BoxDecoration(border: Border(left: BorderSide(color: c.rule, width: 3))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(example.en, style: EnglishText.body(c.ink).copyWith(fontStyle: FontStyle.italic)),
+            const SizedBox(height: 4),
+            Text(example.hi, style: hindi.body(c.inkMuted)),
           ],
         ),
       ),

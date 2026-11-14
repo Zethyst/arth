@@ -18,6 +18,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
     required this.ink,
     required this.inkMuted,
     required this.accent,
+    required this.good,
     required this.marigold,
     required this.rule,
     required this.highlight,
@@ -34,6 +35,11 @@ class ArthColors extends ThemeExtension<ArthColors> {
 
   /// Lac red: selection, primary actions, the tab you're on.
   final Color accent;
+
+  /// "You got it right." The only green in the palette, and the counterpart
+  /// to `accent`: the practice screen used to mark the correct answer in lac
+  /// red, which reads as an error in every app anyone has ever used.
+  final Color good;
 
   /// Marigold: the tapped word, progress, "on" states.
   final Color marigold;
@@ -60,6 +66,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
     ink: Color(0xFF10201D),
     inkMuted: Color(0xFF52635F),
     accent: Color(0xFFB3281C),
+    good: Color(0xFF176B42),
     marigold: Color(0xFFF5B726),
     rule: Color(0xFF8CA59E),
     highlight: Color(0x66F5B726),
@@ -75,6 +82,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
     ink: Color(0xFFF7F7F2),
     inkMuted: Color(0xFF8CA59E),
     accent: Color(0xFFE97B77),
+    good: Color(0xFF5FBF86),
     marigold: Color(0xFFF5B726),
     rule: Color(0xFF3D5F58),
     highlight: Color(0x59F5B726),
@@ -91,6 +99,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
     Color? ink,
     Color? inkMuted,
     Color? accent,
+    Color? good,
     Color? marigold,
     Color? rule,
     Color? highlight,
@@ -105,6 +114,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
         ink: ink ?? this.ink,
         inkMuted: inkMuted ?? this.inkMuted,
         accent: accent ?? this.accent,
+        good: good ?? this.good,
         marigold: marigold ?? this.marigold,
         rule: rule ?? this.rule,
         highlight: highlight ?? this.highlight,
@@ -123,6 +133,7 @@ class ArthColors extends ThemeExtension<ArthColors> {
       ink: Color.lerp(ink, other.ink, t)!,
       inkMuted: Color.lerp(inkMuted, other.inkMuted, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
+      good: Color.lerp(good, other.good, t)!,
       marigold: Color.lerp(marigold, other.marigold, t)!,
       rule: Color.lerp(rule, other.rule, t)!,
       highlight: Color.lerp(highlight, other.highlight, t)!,
@@ -289,7 +300,12 @@ ThemeData arthTheme(Brightness brightness) {
       labelStyle: WidgetStateTextStyle.resolveWith(
         (s) => EnglishText.label(s.contains(WidgetState.selected) ? c.paper : c.ink),
       ),
-      secondaryLabelStyle: EnglishText.label(c.paper),
+      // Mirrors labelStyle rather than being a flat paper: Material reaches
+      // for this one in states we don't control, and a fixed paper label on an
+      // unselected (card-filled) chip is white on white.
+      secondaryLabelStyle: WidgetStateTextStyle.resolveWith(
+        (s) => EnglishText.label(s.contains(WidgetState.selected) ? c.paper : c.ink),
+      ),
       checkmarkColor: c.paper,
       surfaceTintColor: Colors.transparent,
     ),

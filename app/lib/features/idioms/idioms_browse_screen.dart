@@ -87,15 +87,18 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
               children: [
                 Text(t.idiomCount(shown.length), style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13)),
                 const Spacer(),
+                // The label colour is said here, not left to the chip theme:
+                // Material resolved it to paper on an unselected (card-filled)
+                // chip, which is white text on a white chip.
                 FilterChip(
                   selected: _phrasalOnly,
-                  label: Text(t.phrasalVerbs),
+                  label: Text(t.phrasalVerbs, style: EnglishText.label(_phrasalOnly ? c.paper : c.ink)),
                   onSelected: (v) => setState(() => _phrasalOnly = v),
                 ),
                 const SizedBox(width: 8),
                 FilterChip(
                   selected: _savedOnly,
-                  label: Text(t.idiomsSaved),
+                  label: Text(t.idiomsSaved, style: EnglishText.label(_savedOnly ? c.paper : c.ink)),
                   onSelected: (v) => setState(() => _savedOnly = v),
                 ),
               ],
