@@ -133,36 +133,58 @@ class WordTooltip extends ConsumerWidget {
               pinnedIndex: state.context?.senseIndex,
             ),
             const SizedBox(height: 8),
+            // A plain Row with a Spacer ran 5.5px off the end in English,
+            // because three buttons' worth of Material padding is wider than
+            // the tooltip, and in Hindi the labels are longer still. There is
+            // no Spacer now: the right-hand pair is measured first and keeps
+            // its full width, `spaceBetween` opens the gap, and the one
+            // Flexible — "Save word", the label that can be guessed from its
+            // bookmark — is what gives ground when there isn't enough.
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 // Saving is the bookmark in the header; the reader's own
                 // action here is the card.
-                if (onMakeCard != null)
-                  TextButton.icon(
-                    onPressed: onMakeCard,
-                    style: TextButton.styleFrom(foregroundColor: c.accent),
-                    icon: const Icon(Icons.style_outlined, size: 20),
-                    label: Text(t.makeCard, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale)),
-                  )
-                else
-                  SaveWordButton(
-                    entry: entry,
-                    sentence: state.sentence,
-                    bookId: bookId,
-                    bookTitle: bookTitle,
-                    labelled: true,
-                  ),
-                const Spacer(),
-                IconButton(
-                  tooltip: t.translateSentence,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.translate_rounded, color: c.accent, size: 20),
-                  onPressed: onTranslateSentence,
+                Flexible(
+                  child: onMakeCard != null
+                      ? TextButton.icon(
+                          onPressed: onMakeCard,
+                          style: compactTextButton(c.accent),
+                          icon: const Icon(Icons.style_outlined, size: 20),
+                          label: Text(
+                            t.makeCard,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale),
+                          ),
+                        )
+                      : SaveWordButton(
+                          entry: entry,
+                          sentence: state.sentence,
+                          bookId: bookId,
+                          bookTitle: bookTitle,
+                          labelled: true,
+                        ),
                 ),
-                TextButton(
-                  onPressed: onShowDetails,
-                  style: TextButton.styleFrom(foregroundColor: c.accent),
-                  child: Text(t.seeFullEntry, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: t.translateSentence,
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.translate_rounded, color: c.accent, size: 20),
+                      onPressed: onTranslateSentence,
+                    ),
+                    TextButton(
+                      onPressed: onShowDetails,
+                      style: compactTextButton(c.accent),
+                      child: Text(
+                        t.seeFullEntry,
+                        maxLines: 1,
+                        style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

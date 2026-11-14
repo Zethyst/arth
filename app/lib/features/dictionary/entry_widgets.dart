@@ -87,12 +87,30 @@ class SaveWordButton extends ConsumerWidget {
     }
     return TextButton.icon(
       onPressed: toggle,
-      style: TextButton.styleFrom(foregroundColor: c.accent),
+      style: compactTextButton(c.accent),
       icon: icon,
-      label: Text(saved ? t.saved : t.save, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale)),
+      // It shares a row with two more actions, and in Hindi the three labels
+      // are wider than the tooltip: this one gives ground rather than push
+      // the row off the end.
+      label: Text(
+        saved ? t.saved : t.save,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: uiLabel(hindi: t.isHindi, color: c.accent, scale: settings.hindiScale),
+      ),
     );
   }
 }
+
+/// A text button that gives up its padding before the row it sits in gives up
+/// its width. Material's 16px either side, times three buttons, is what put
+/// the word tooltip's actions 5.5px past the edge in English and further in
+/// Hindi.
+ButtonStyle compactTextButton(Color color) => TextButton.styleFrom(
+      foregroundColor: color,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      minimumSize: const Size(0, 40),
+    );
 
 /// Word, IPA, Devanagari pronunciation, speaker and save buttons.
 class EntryHeader extends ConsumerWidget {
