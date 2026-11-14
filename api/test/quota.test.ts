@@ -216,3 +216,85 @@ describe('one phone, many accounts', () => {
     await app.close();
   });
 });
+
+// ---- What a use is spent on ----
+
+describe('what an AI use is spent on', () => {
+  const coachTurn = JSON.stringify({ reply: 'Accha, tell me more.', replyHindi: 'अच्छा, और बताइए।' });
+  const coachPost = (uid: string, turns: { role: 'coach' | 'learner'; text: string }[], said: string) => ({
+    method: 'POST' as const,
+    url: '/v1/coach',
+    headers: as(uid),
+    payload: { scenario: 'interview', turns, said },
+  });
+
+  test('a coaching conversation costs one use, however long it runs', async () => {
+    // Free is 2 here, so a per-turn charge would run out on the third reply.
+    const llm = new FakeLLM({ coach_turn: [coachTurn, coachTurn, coachTurn, coachTurn] });
+    const { app } = setup(llm);
+    const turns: { role: 'coach' | 'learner'; text: string }[] = [{ role: 'coach', text: 'Tell me about yourself.' }];
+
+    const first = await app.inject(coachPost('cam', turns, 'I work in marketing.'));
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.headers['x-ai-used'], '1', 'the first sentence buys the conversation');
+
+    // Everything after it is the same conversation and is not charged again.
+    for (var i = 0; i < 3; i++) {
+      turns.push({ role: 'learner', text: `line ${i}` }, { role: 'coach', text: 'And then?' });
+      const next = await app.inject(coachPost('cam', turns, `line ${i + 1}`));
+      assert.equal(next.statusCode, 200, 'turn $i still answered');
+      assert.equal(next.headers['x-ai-used'], undefined, 'no use is counted, so no header is sent');
+    }
+    await app.close();
+  });
+
+  test('a second conversation costs a second use, and then the allowance is spent', async () => {
+    const llm = new FakeLLM({ coach_turn: [coachTurn, coachTurn, coachTurn] });
+    const { app } = setup(llm);
+    const opening = [{ role: 'coach' as const, text: 'Tell me about yourself.' }];
+    assert.equal((await app.inject(coachPost('cal', opening, 'One.'))).statusCode, 200);
+    const second = await app.inject(coachPost('cal', opening, 'Two.'));
+    assert.equal(second.statusCode, 200);
+    assert.equal(second.headers['x-ai-used'], '2');
+    // Out of allowance: a new conversation is refused, and so is carrying on,
+    // because an empty account cannot keep talking either.
+    assert.equal((await app.inject(coachPost('cal', opening, 'Three.'))).statusCode, 402);
+    assert.equal(
+      (await app.inject(coachPost('cal', [...opening, { role: 'learner', text: 'Two.' }], 'More.'))).statusCode,
+      402,
+    );
+    await app.close();
+  });
+
+  test('a cached answer gives the use back', async () => {
+    const llm = new FakeLLM({ proofread: [JSON.stringify({ corrected: 'I went home.', fixes: [], alternatives: [] })] });
+    const { app } = setup(llm);
+    const post = { method: 'POST' as const, url: '/v1/proofread', headers: as('cora'), payload: { text: 'I goed home.' } };
+    const first = await app.inject(post);
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.headers['x-ai-used'], '1');
+    // The same text again: served from the cache, so nothing was produced and
+    // nothing is owed. The header reports the count after the refund, and one
+    // scripted answer proves there was no second model call.
+    const again = await app.inject(post);
+    assert.equal(again.statusCode, 200);
+    assert.equal(again.headers['x-ai-used'], '1', 'counted, then given back');
+    assert.equal(llm.requests.length, 1);
+    // Free is 2 here: a third press on new text still has an answer to spend.
+    const third = await app.inject({ ...post, payload: { text: 'I eated.' } });
+    assert.equal(third.statusCode, 500, 'nothing left scripted, but it was admitted');
+    await app.close();
+  });
+
+  test('a failed answer gives the use back too', async () => {
+    const { app } = setup(new FakeLLM({})); // nothing scripted: the call throws
+    const post = { method: 'POST' as const, url: '/v1/english', headers: as('cyrus'), payload: { text: 'नमस्ते' } };
+    const r = await app.inject(post);
+    assert.equal(r.statusCode, 500);
+    assert.equal(r.headers['x-ai-used'], '0', 'spent to admit the request, given back when it failed');
+    // Free is 2 here. Four failures in a row would have exhausted it twice
+    // over if a failure were charged; the fifth is still admitted.
+    for (var i = 0; i < 4; i++) assert.equal((await app.inject(post)).statusCode, 500);
+    await app.close();
+  });
+});

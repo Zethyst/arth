@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { openGate, type AiGate } from '../auth/ai-gate.js';
+import { openGate, settle, type AiGate } from '../auth/ai-gate.js';
 import { cacheStats } from '../cache/cache.js';
 import { ApiError, messages } from '../lib/errors.js';
 import { ok } from '../lib/envelope.js';
@@ -17,8 +17,8 @@ export const toolRoutes: FastifyPluginAsync<{ deps: ToolDeps; spend: LlmSpend; g
   app.post('/english', async (request, reply) => {
     const parsed = Body.safeParse(request.body);
     if (!parsed.success) throw new ApiError('BAD_REQUEST', messages.badRequest);
-    await gate(request, reply);
-    const out = await toEnglish({ ...deps, spend: () => spend(request) }, parsed.data.text);
+    const use = await gate(request, reply);
+    const out = await settle(use, () => toEnglish({ ...deps, spend: () => spend(request) }, parsed.data.text));
     if (out.cache === 'hit') cacheStats.hits++;
     else cacheStats.misses++;
     request.meta.cache = out.cache;
@@ -31,8 +31,8 @@ export const toolRoutes: FastifyPluginAsync<{ deps: ToolDeps; spend: LlmSpend; g
   app.post('/proofread', async (request, reply) => {
     const parsed = Body.safeParse(request.body);
     if (!parsed.success) throw new ApiError('BAD_REQUEST', messages.badRequest);
-    await gate(request, reply);
-    const out = await proofread({ ...deps, spend: () => spend(request) }, parsed.data.text);
+    const use = await gate(request, reply);
+    const out = await settle(use, () => proofread({ ...deps, spend: () => spend(request) }, parsed.data.text));
     if (out.cache === 'hit') cacheStats.hits++;
     else cacheStats.misses++;
     request.meta.cache = out.cache;

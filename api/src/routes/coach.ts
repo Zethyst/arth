@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { openGate, type AiGate } from '../auth/ai-gate.js';
+import { openGate, settle, type AiGate } from '../auth/ai-gate.js';
 import { cacheStats } from '../cache/cache.js';
 import { ApiError, messages } from '../lib/errors.js';
 import { ok } from '../lib/envelope.js';
@@ -36,15 +36,20 @@ export const coachRoutes: FastifyPluginAsync<{ deps: CoachDeps; spend: LlmSpend;
   /** POST /v1/coach — the coach's next turn, and a correction if one is due. */
   app.post('/coach', async (request, reply) => {
     const parsed = Body.safeParse(request.body);
-    if (!parsed.success || !isScenario(parsed.data.scenario)) {
-      throw new ApiError('BAD_REQUEST', messages.badRequest);
-    }
-    await gate(request, reply);
-    const out = await coachReply(
-      { ...deps, spend: () => spend(request) },
-      parsed.data.scenario,
-      parsed.data.turns,
-      parsed.data.said,
+    if (!parsed.success) throw new ApiError('BAD_REQUEST', messages.badRequest);
+    // Pulled out of `parsed` so the narrowing survives into the closure below.
+    const { scenario, turns, said } = parsed.data;
+    if (!isScenario(scenario)) throw new ApiError('BAD_REQUEST', messages.badRequest);
+    // A conversation is one AI use, spent on the learner's first sentence.
+    // Charging every turn made twenty minutes of roleplay cost a third of a
+    // Free reader's lifetime allowance, and the later turns — which replay
+    // the whole history — were the dear ones. Allowance is still required to
+    // carry on; it just isn't spent again.
+    const opening = said === '';
+    const started = turns.some((t) => t.role === 'learner');
+    const use = await gate(request, reply, { count: !opening && !started });
+    const out = await settle(use, () =>
+      coachReply({ ...deps, spend: () => spend(request) }, scenario, turns, said),
     );
     if (out.cache === 'hit') cacheStats.hits++;
     else cacheStats.misses++;

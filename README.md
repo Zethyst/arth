@@ -608,14 +608,28 @@ Setup (accounts stay hidden until this is done):
 
 ## Tiers, AI allowance, ads
 
-| Tier  | AI answers                     | Ads                  |
-|-------|--------------------------------|----------------------|
-| Free  | 100, lifetime                  | banners outside the reader |
-| Pro   | 1,000 per calendar month (UTC) | none                 |
-| Super | unlimited                      | none                 |
+| Tier  | AI answers                      | Ads                  |
+|-------|---------------------------------|----------------------|
+| Free  | 100, lifetime                   | banners outside the reader |
+| Pro   | 500 per calendar month (UTC)    | none                 |
+| Super | 5,000 per calendar month (UTC)  | none                 |
 
-Only AI answers count: `/context` (meaning in this sentence), `/translate`, and a dictionary
-entry generated live by `/lookup`. The on-device dictionary is always free. When accounts are on
+Only AI answers count: `/context` (meaning in this sentence), `/translate`, `/english`,
+`/proofread`, `/grammar`, `/summary`, `/coach`, and a dictionary entry generated live by
+`/lookup`. The on-device dictionary is always free, and so is **Say it right** — its text to
+speech, its listening and its scoring all happen on the phone, so it costs nothing to run and
+is the one tool a Free reader can use every day for ever.
+
+**A coaching conversation is one use, not one per turn.** It is spent on the learner's first
+sentence; the scene's opening line and every turn after the first are admitted without being
+counted (`gate(request, reply, { count: false })`). Charging per turn made twenty minutes of
+roleplay cost a third of a Free reader's lifetime allowance, and the later turns — which
+replay the whole history, about 5,400 input tokens by then — were the expensive ones.
+Allowance is still required to carry on, so an empty account cannot keep talking.
+
+A use is spent to admit the request and given back when the request produced nothing:
+`settle()` in `auth/ai-gate.ts` refunds on a thrown error and on a cache hit, so proofreading
+the same paragraph twice is charged once. When accounts are on
 (`FIREBASE_PROJECT_ID` set), those routes need sign-in; a use is reserved atomically before the
 work and refunded when no AI answer was served (single-sense words, failures). Background
 prefetch is free but only while allowance remains. Responses carry `x-ai-used` / `x-ai-limit` /
