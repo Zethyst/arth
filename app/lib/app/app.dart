@@ -124,8 +124,12 @@ class _ArthAppState extends ConsumerState<ArthApp> {
   Future<void> _refreshDictionaryIfStale() async {
     if (widget.needsSeed) return; // the seed screen handles the first run
     final store = ref.read(localStoreProvider);
+    // 20 hours, not 24. The window runs from the last check, so a reader who
+    // opens Arth at about the same time each evening skips a day every day.
+    // One phone sat 81 seconds short of the 24-hour mark and went another
+    // day without the idioms that had been published the night before.
     final last = DateTime.tryParse(await store.get('seed_checked_at') ?? '');
-    if (last != null && DateTime.now().difference(last) < const Duration(hours: 24)) return;
+    if (last != null && DateTime.now().difference(last) < const Duration(hours: 20)) return;
     final r = await ref.read(seedProvider.notifier).run();
     if (r.phase == SeedPhase.done) {
       await store.set('seed_checked_at', DateTime.now().toIso8601String());

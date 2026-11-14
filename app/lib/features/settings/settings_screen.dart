@@ -14,6 +14,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+/// Runs the same delta the app runs once a day, on demand, and stamps the
+/// clock so the automatic one doesn't immediately repeat it. A failure needs
+/// no message here: the caption under the progress bar already says why.
+Future<void> _checkDictionaryNow(BuildContext context, WidgetRef ref) async {
+  final t = ref.read(stringsProvider);
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final r = await ref.read(seedProvider.notifier).run();
+  if (r.phase != SeedPhase.done) return;
+  await ref.read(localStoreProvider).set('seed_checked_at', DateTime.now().toIso8601String());
+  messenger?.showSnackBar(SnackBar(content: Text(t.dictionaryChecked)));
+}
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -127,14 +139,29 @@ class SettingsScreen extends ConsumerWidget {
             ),
 
             SettingsHeading(t.sectionDictionary),
-            Text(
-              count == null ? '…' : t.wordsOnDevice(count),
-              style: uiBody(
-                hindi: t.isHindi,
-                color: c.ink,
-                scale: s.hindiScale,
-                size: 16.5,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    count == null ? '…' : t.wordsOnDevice(count),
+                    style: uiBody(
+                      hindi: t.isHindi,
+                      color: c.ink,
+                      scale: s.hindiScale,
+                      size: 16.5,
+                    ),
+                  ),
+                ),
+                // The daily refresh is enough for almost everyone, but a
+                // reader who has just been told about a new word, or whose
+                // idioms haven't arrived, needs a way to ask now rather than
+                // wait out a window they cannot see.
+                TextButton(
+                  onPressed: seed.phase == SeedPhase.downloading ? null : () => unawaited(_checkDictionaryNow(context, ref)),
+                  style: TextButton.styleFrom(foregroundColor: c.accent, visualDensity: VisualDensity.compact),
+                  child: Text(t.checkNow, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: s.hindiScale)),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             if (seed.phase == SeedPhase.downloading)
@@ -146,8 +173,6 @@ class SettingsScreen extends ConsumerWidget {
                   backgroundColor: c.rule,
                 ),
               ),
-            // No update button: the app refreshes the dictionary itself once
-            // a day (app.dart), and an unfinished first download resumes.
             if (seed.phase == SeedPhase.failed || seed.retrying)
               SettingsCaption(seedStatusText(t, seed)),
 

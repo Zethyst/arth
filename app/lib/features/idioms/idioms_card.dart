@@ -21,9 +21,28 @@ class IdiomsCard extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final scale = settings.hindiScale;
     final h = HindiText(scale);
-    final all = ref.watch(idiomsProvider).valueOrNull ?? const <IdiomRow>[];
-    // Nothing to show until the dictionary has been downloaded.
-    if (all.isEmpty) return const SizedBox.shrink();
+    final idioms = ref.watch(idiomsProvider);
+    final all = idioms.valueOrNull ?? const <IdiomRow>[];
+    // A phone whose dictionary predates the idioms has none of them, and
+    // this used to draw an empty box: no idioms and no reason, which reads
+    // as the feature having been taken away. Say so instead, and point at
+    // the one screen that can fetch them.
+    if (all.isEmpty) {
+      if (idioms.isLoading) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionLabel(t.idiomsTitle),
+          Pressable.card(
+            onTap: () => context.go('/settings'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+              child: Text(t.idiomsEmpty, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale)),
+            ),
+          ),
+        ],
+      );
+    }
     final today = ref.watch(dailyIdiomsProvider);
     final first = today.isEmpty ? null : today.first;
     final left = today.where((i) => i.seenAt == null).length;

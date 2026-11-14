@@ -18,7 +18,11 @@ final AsyncNotifierProvider<IdiomsNotifier, List<IdiomRow>> idiomsProvider =
 
 class IdiomsNotifier extends AsyncNotifier<List<IdiomRow>> {
   @override
-  Future<List<IdiomRow>> build() => ref.watch(localStoreProvider).allIdioms();
+  Future<List<IdiomRow>> build() {
+    // Rebuilt when a seed run brings new rows; see dictionaryVersionProvider.
+    ref.watch(dictionaryVersionProvider);
+    return ref.watch(localStoreProvider).allIdioms();
+  }
 
   LocalStore get _store => ref.read(localStoreProvider);
 

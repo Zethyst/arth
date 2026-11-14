@@ -147,7 +147,11 @@ class SeedNotifier extends Notifier<SeedProgress> {
     unawaited(_retryWhenOnline?.cancel());
     _retryWhenOnline = null;
     final r = await _loader.run(onProgress: (p) => state = p, delta: delta);
-    if (r.phase == SeedPhase.done) ref.invalidate(localEntryCountProvider);
+    if (r.phase == SeedPhase.done) {
+      final version = ref.read(dictionaryVersionProvider.notifier);
+      ref.invalidate(localEntryCountProvider);
+      version.state++;
+    }
     if (r.phase == SeedPhase.failed && r.failure == SeedFailure.offline) {
       _retryWhenOnline = networkBack().listen((_) => unawaited(run(delta: delta)));
     }
@@ -170,6 +174,16 @@ Stream<void> networkBack() {
     return back;
   }).map((_) {});
 }
+
+/// Bumped after every successful seed run.
+///
+/// Anything built out of the on-device dictionary watches this instead of the
+/// seed itself, so a delta that brings new rows is visible without a restart
+/// and without the dictionary's readers knowing anything about downloading.
+/// The idiom list needed exactly this: a phone that seeded before the idioms
+/// existed downloaded them in the daily delta and still showed none, because
+/// the provider had been built once and never asked again.
+final dictionaryVersionProvider = StateProvider<int>((_) => 0);
 
 final localEntryCountProvider = FutureProvider<int>(
   (ref) => ref.watch(localStoreProvider).entryCount(),

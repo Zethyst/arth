@@ -239,7 +239,7 @@ enum AppStrings {
   String get dailyIdiomSetting => _('An idiom every day', 'हर दिन एक मुहावरा');
   String get dailyIdiomHelp =>
       _('One idiom a day, from the ones already on your phone.', 'आपके फ़ोन पर मौजूद मुहावरों में से हर दिन एक।');
-  String get idiomsEmpty => _('Idioms arrive with the dictionary. Download it from the You tab.', 'मुहावरे शब्दकोश के साथ आते हैं। You टैब से उसे डाउनलोड करें।');
+  String get idiomsEmpty => _('Idioms arrive with the dictionary. Check for an update in the You tab.', 'मुहावरे शब्दकोश के साथ आते हैं। आप टैब में अपडेट देखें।');
   String get idiomTapToTurn => _('Tap to turn it over', 'पलटने के लिए दबाएँ');
   String get idiomTapToTurnBack => _('Tap to turn back', 'वापस पलटें');
   String get idiomDone => _('That’s today’s set.', 'आज के मुहावरे हो गए।');
@@ -283,6 +283,8 @@ enum AppStrings {
   String get settingsTitle => _('You', 'आप');
   String get sectionReading => _('Reading', 'पढ़ना');
   String get sectionDictionary => _('Dictionary', 'शब्दकोश');
+  String get checkNow => _('Check now', 'अभी देखें');
+  String get dictionaryChecked => _('The dictionary is up to date.', 'शब्दकोश अप-टू-डेट है।');
   String get sectionServer => _('Server', 'सर्वर');
   String get sectionInfo => _('Info', 'जानकारी');
   String get language => _('Interface language', 'इंटरफ़ेस की भाषा');
