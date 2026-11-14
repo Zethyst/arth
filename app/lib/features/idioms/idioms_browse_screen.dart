@@ -99,33 +99,38 @@ class _IdiomsBrowseScreenState extends ConsumerState<IdiomsBrowseScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
+            // The filters are controls and sit on their own line; the count
+            // is a caption about the list and sits over it, full width. They
+            // shared a row until the caption named the order too and had to
+            // be cut off mid-word to fit — and in Hindi the two chips alone
+            // are nearly the width of the screen.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Expanded, not a Spacer: in Hindi the two chips are wider
-                // than the row, and the count is what should give ground.
-                Expanded(
-                  child: Text(
-                    plain ? '${t.idiomCount(shown.length)} · ${t.idiomsBestKnownFirst}' : t.idiomCount(shown.length),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13),
-                  ),
+                Row(
+                  children: [
+                    // The label colour is said here, not left to the chip
+                    // theme: Material resolved it to paper on an unselected
+                    // (card-filled) chip, which is white text on white.
+                    FilterChip(
+                      selected: _phrasalOnly,
+                      label: Text(t.phrasalVerbs, style: EnglishText.label(_phrasalOnly ? c.paper : c.ink)),
+                      onSelected: (v) => setState(() => _phrasalOnly = v),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      selected: _savedOnly,
+                      label: Text(t.idiomsSaved, style: EnglishText.label(_savedOnly ? c.paper : c.ink)),
+                      onSelected: (v) => setState(() => _savedOnly = v),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                // The label colour is said here, not left to the chip theme:
-                // Material resolved it to paper on an unselected (card-filled)
-                // chip, which is white text on a white chip.
-                FilterChip(
-                  selected: _phrasalOnly,
-                  label: Text(t.phrasalVerbs, style: EnglishText.label(_phrasalOnly ? c.paper : c.ink)),
-                  onSelected: (v) => setState(() => _phrasalOnly = v),
+                const SizedBox(height: 8),
+                Text(
+                  plain ? '${t.idiomCount(shown.length)} · ${t.idiomsBestKnownFirst}' : t.idiomCount(shown.length),
+                  style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13),
                 ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  selected: _savedOnly,
-                  label: Text(t.idiomsSaved, style: EnglishText.label(_savedOnly ? c.paper : c.ink)),
-                  onSelected: (v) => setState(() => _savedOnly = v),
-                ),
+                const SizedBox(height: 4),
               ],
             ),
           ),
