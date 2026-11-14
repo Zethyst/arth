@@ -7,6 +7,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/data/seed_loader.dart';
 import 'package:arth/features/account/account_card.dart';
 import 'package:arth/features/account/ai_lookup_gate.dart';
+import 'package:arth/features/rating/rate_app.dart';
 import 'package:arth/features/seed/seed_screen.dart';
 import 'package:arth/features/settings/settings_controls.dart';
 import 'package:flutter/material.dart';
@@ -151,6 +152,36 @@ class SettingsScreen extends ConsumerWidget {
               SettingsCaption(seedStatusText(t, seed)),
 
             const SizedBox(height: 28),
+            // The sheet asks on its own after a few days' reading; this is
+            // for the reader who goes looking for it in between.
+            Pressable.card(
+              depth: 4,
+              onTap: () => unawaited(showRatingSheet(context, ref)),
+              child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          t.rateMenu,
+                          style: uiBody(
+                            hindi: t.isHindi,
+                            color: c.ink,
+                            scale: s.hindiScale,
+                            size: 16.5,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.star_outline_rounded,
+                        color: c.accent,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+            ),
+            const SizedBox(height: 12),
             Pressable.card(
               depth: 4,
               onTap: () => context.push('/about'),

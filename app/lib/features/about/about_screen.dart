@@ -12,7 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// Who made Arth, and how to reach them.
 const _portfolioUrl = 'https://zethyst.netlify.app/';
-const _whatsAppNumber = '918318876136'; // +91 83188 76136, as wa.me wants it
+/// Also the "tell us" door in the rating sheet (features/rating).
+const kWhatsAppNumber = '918318876136'; // +91 83188 76136, as wa.me wants it
 
 /// The signature's mauve, the same in both themes.
 const _mauve = Color(0xFF9A6A8E);
@@ -121,7 +122,7 @@ class AboutScreen extends ConsumerWidget {
           OutlinedButton.icon(
             onPressed: () {
               Haptics.open();
-              unawaited(open(Uri.https('wa.me', '/$_whatsAppNumber', {'text': t.whatsAppHello})));
+              unawaited(open(Uri.https('wa.me', '/$kWhatsAppNumber', {'text': t.whatsAppHello})));
             },
             icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
             label: Text(t.chatOnWhatsApp, style: uiLabel(hindi: t.isHindi, color: c.ink, scale: scale).copyWith(fontSize: 15)),

@@ -873,4 +873,27 @@ enum AppStrings {
         'Read English books and tap any word — its meaning, in this sentence, in plain Hindi.',
         'अंग्रेज़ी किताबें पढ़ते हुए किसी भी शब्द पर टैप करें — उसका मतलब, इसी वाक्य में, आसान हिंदी में।',
       );
+
+  // ---- rating (features/rating/rate_app.dart) ----
+  String get rateMenu => _('Rate Arth', 'अर्थ को रेटिंग दें');
+  String get rateTitle => _('How is Arth treating you?', 'अर्थ कैसा लग रहा है?');
+  String get rateSubtitle => _('Tap a star. It takes a second, and it helps a lot.', 'एक सितारा चुनें। एक पल लगेगा, और बहुत मदद होगी।');
+  String get rateThanks => _('Thank you!', 'शुक्रिया!');
+  String get rateWriteWhy => _(
+        'Two lines on the store help other Hindi readers find Arth. Would you write them?',
+        'स्टोर पर दो लाइनें लिख दीजिए — इससे और हिंदी पाठकों तक अर्थ पहुँचेगा।',
+      );
+  String get rateWriteCta => _('Write a review', 'रिव्यू लिखें');
+  String get rateSorryTitle => _('Sorry — it isn’t there yet.', 'माफ़ कीजिए — अभी कुछ कमी है।');
+  String get rateSorryWhy => _(
+        'Tell us what is missing and we will work on it. One message is enough.',
+        'बताइए क्या कमी रह गई, हम उस पर काम करेंगे। एक मैसेज काफ़ी है।',
+      );
+  String get rateTellUs => _('Tell us what’s missing', 'कमी बताएँ');
+  String get rateInStore => _('Review on the store', 'स्टोर पर रिव्यू दें');
+  String get rateNotNow => _('Not now', 'अभी नहीं');
+  String get rateFeedbackHello => _(
+        'Hi! I use Arth, and here is what I think could be better:',
+        'नमस्ते! मैं अर्थ इस्तेमाल करता/करती हूँ। मुझे लगता है कि यह बेहतर हो सकता है:',
+      );
 }

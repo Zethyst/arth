@@ -77,6 +77,12 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- …and without this the rating sheet cannot see the Play Store to
+             send a reader to the review box. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="market" />
+        </intent>
     </queries>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

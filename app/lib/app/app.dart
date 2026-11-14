@@ -10,12 +10,16 @@ import 'package:arth/app/router.dart';
 import 'package:arth/app/strings.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/seed_loader.dart';
+import 'package:arth/features/rating/rate_app.dart';
 import 'package:arth/features/scan/scan_pages.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+
+/// The three reader routes, by pattern.
+const Set<String> _readerRoutes = {'/read/:id', '/epub/:id', '/scan/:id'};
 
 class ArthApp extends ConsumerStatefulWidget {
   const ArthApp({required this.needsSeed, super.key});
@@ -30,6 +34,10 @@ class _ArthAppState extends ConsumerState<ArthApp> {
   late final GoRouter router = buildRouter(needsSeed: widget.needsSeed);
   StreamSubscription<String>? _pushRoutes;
   StreamSubscription<String>? _localRoutes;
+
+  /// The route before this one, so the app can tell a book being closed from
+  /// a book being opened.
+  String? _lastRoute;
 
   @override
   void initState() {
@@ -93,6 +101,8 @@ class _ArthAppState extends ConsumerState<ArthApp> {
     final analytics = ref.read(analyticsProvider);
     final route = router.routerDelegate.currentConfiguration.fullPath;
     if (!analytics.screen(route)) return;
+    final from = _lastRoute;
+    _lastRoute = route;
     final format = switch (route) {
       '/read/:id' => 'pdf',
       '/epub/:id' => 'epub',
@@ -100,6 +110,13 @@ class _ArthAppState extends ConsumerState<ArthApp> {
       _ => null,
     };
     if (format != null) analytics.track('Book Opened', {'format': format});
+    // Closing a book and landing back in the library: the one moment in the
+    // app where the reader has finished something and is interrupting nothing.
+    // Opening one is the opposite, which is why the direction matters.
+    if (route == '/' && (format == null) && _readerRoutes.contains(from)) {
+      final ctx = router.routerDelegate.navigatorKey.currentContext;
+      if (ctx != null) unawaited(maybeAskForRating(ctx, ref));
+    }
   }
 
   /// Pull the entry delta quietly once a day so the on-device dictionary

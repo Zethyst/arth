@@ -716,6 +716,8 @@ Mixpanel (`app/lib/data/analytics.dart`). Never book titles, words or sentences.
 | `Card Created` | `kind`, `from_book` |
 | `Deck Saved` | `cards` |
 | `Plan Purchase` | `plan`, `yearly`, `outcome`, `coupon` |
+| `Rating Asked` | — |
+| `Rated` | `stars` (1–5) |
 
 Every event carries `plan` and `language`. Signed-in readers are identified by Firebase uid.
 Readers can opt out in Settings → Share usage stats. The project token is built in; debug builds
@@ -726,6 +728,32 @@ send nothing unless `--dart-define=MIXPANEL_DEBUG=true`. Data residency:
   *Personal info → User IDs*, *Financial info → Purchase history*, *App activity → App
   interactions*, *Device or other IDs*. Where a type is already declared (e.g. User IDs for
   accounts), add the Analytics purpose to it.
+
+## Asking for a rating
+
+`app/lib/features/rating/rate_app.dart`. Five stars of our own, then the store.
+
+The platforms' own prompts are rationed and silent about it — Apple shows its sheet a few
+times a year at most and may show nothing, Play's quota is undocumented — so a button the
+reader just pressed cannot be built on one. Ours always opens, and a tapped star leads to
+where a review is actually typed: `market://details?id=com.zethyst.arth` on Android (with
+the Play web address behind it, and a `<queries>` entry in the manifest so the intent is
+visible on Android 11+), and `https://apps.apple.com/app/id<id>?action=write-review` on
+iOS, which opens the composer rather than the listing. Set the id with
+`--dart-define=ARTH_APP_STORE_ID=…` once Arth is on the App Store; until then iOS falls
+back to `in_app_review`'s `requestReview()`, which needs no id and may show nothing.
+
+**When it asks** (`shouldAskForRating`, a pure function with its own test): never after the
+reader has rated or declined for good; never within 120 days of the last ask; and only once
+they have a 3-day reading streak **or** 45 minutes of reading behind them. The moment is
+closing a book and landing back in the library — `_trackScreen` in `app/lib/app/app.dart`
+watches the direction, because opening a book is the opposite of a good time. **You → Rate
+Arth** opens the same sheet on demand.
+
+Both doors are open at every rating: five stars still offers "tell us what's missing"
+(WhatsApp, the same number as About), and one star still offers the store. Routing unhappy
+readers away from the store is against the spirit of both stores' rules, and it makes the
+rating meaningless.
 
 ## Push notifications
 
