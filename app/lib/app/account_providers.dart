@@ -57,6 +57,21 @@ class AccountNotifier extends AsyncNotifier<Account?> {
     return api.me();
   }
 
+  /// Re-reads the profile, leaving the one on screen in place until the new
+  /// one arrives. The plan rides on this too: a failed refresh must not read
+  /// as Free, and a refresh must not blank the plan while it's in flight.
+  ///
+  /// Every plan is granted or bought outside the app, so this is how an
+  /// upgrade reaches a phone that is already signed in.
+  Future<void> refresh() async {
+    if (ref.read(signedInUidProvider) == null) return;
+    try {
+      state = AsyncData(await ref.read(apiClientProvider).me());
+    } on ApiFailure catch (e) {
+      debugPrint('account refresh: $e');
+    }
+  }
+
   Future<void> updateProfile({String? displayName, String? bio}) async {
     final updated = await ref.read(apiClientProvider).updateMe(displayName: displayName, bio: bio);
     state = AsyncData(updated);
@@ -175,9 +190,16 @@ class SyncNotifier extends Notifier<SyncState> {
   Timer? _debounce;
   Future<void>? _running;
   bool _again = false;
+  bool _wantProfile = false;
+  DateTime? _profileAt;
 
   /// Rows per request; the store's default page size.
   static const _batch = 500;
+
+  /// How often a sync also re-reads the profile. A sync runs on every resume
+  /// and a few seconds after every edit; the plan changes far less often than
+  /// that, but it must not take a restart to show up.
+  static const _profileEvery = Duration(minutes: 1);
 
   @override
   SyncState build() {
@@ -200,7 +222,11 @@ class SyncNotifier extends Notifier<SyncState> {
   }
 
   /// Syncs now. A call while a sync is running queues one more round.
-  Future<void> run() {
+  ///
+  /// [withProfile] re-reads the plan however recently it was read: it's what
+  /// a reader who has just been given one is asking for when they tap Sync.
+  Future<void> run({bool withProfile = false}) {
+    _wantProfile = _wantProfile || withProfile;
     if (_running != null) {
       _again = true;
       return _running!;
@@ -249,11 +275,24 @@ class SyncNotifier extends Notifier<SyncState> {
           ..invalidate(bookmarksProvider);
       }
       state = SyncState(lastSyncedAt: DateTime.now());
-      // The server answered, so a profile that failed to load can load now.
-      final account = ref.read(accountProvider);
-      if (account.hasError && !account.hasValue && !account.isLoading) ref.invalidate(accountProvider);
+      await _readProfile();
     } on ApiFailure catch (e) {
       state = SyncState(phase: SyncPhase.failed, lastSyncedAt: state.lastSyncedAt, error: e.code);
     }
+  }
+
+  /// The server answered, so the profile can be read again: one that failed
+  /// to load can load now, and a plan granted since the app opened — which is
+  /// how every plan arrives — shows up without a restart.
+  Future<void> _readProfile() async {
+    final account = ref.read(accountProvider);
+    // Its own build is on its way with a fresh profile; leave it to finish.
+    if (account.isLoading && !account.hasValue) return;
+    final at = _profileAt;
+    final stale = at == null || DateTime.now().difference(at) > _profileEvery;
+    if (!_wantProfile && !stale && !account.hasError) return;
+    _wantProfile = false;
+    _profileAt = DateTime.now();
+    await ref.read(accountProvider.notifier).refresh();
   }
 }

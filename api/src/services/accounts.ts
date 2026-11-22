@@ -224,26 +224,39 @@ export type SyncResponse = { cursor: number; more: boolean; cards: CardRow[]; bo
 export const PULL_LIMIT = 500;
 
 /**
+ * Rows upserted at once. Each one is its own round trip to the database, so
+ * a device's whole batch — up to a thousand rows on a first sync — would
+ * take a thousand of them one after another: minutes on a far-away
+ * database. Rows don't depend on each other (each has its own id and its
+ * own sequence number), so they go in waves instead.
+ */
+const PUSH_CONCURRENCY = 32;
+
+/**
  * Applies the device's changes, then returns what changed on the server
  * since its cursor — minus the rows it just sent, which it already has.
  */
 export async function sync(store: AccountStore, uid: string, req: SyncRequest, limit = PULL_LIMIT): Promise<SyncResponse> {
   let accepted = 0;
   const pushed = new Set<string>();
-  let seq = req.cards.length + req.bookmarks.length > 0 ? await store.reserveSeqs(uid, req.cards.length + req.bookmarks.length) : 0;
-  const push = async <K extends SyncKind>(kind: K, rows: RowOf<K>[]) => {
-    for (const row of rows) {
-      pushed.add(`${kind}:${row.id}:${row.updatedAt}`);
-      if (await store.upsertIfNewer(kind, uid, row, seq++)) accepted++;
+  const seq = req.cards.length + req.bookmarks.length > 0 ? await store.reserveSeqs(uid, req.cards.length + req.bookmarks.length) : 0;
+  const push = async <K extends SyncKind>(kind: K, rows: RowOf<K>[], first: number) => {
+    for (const row of rows) pushed.add(`${kind}:${row.id}:${row.updatedAt}`);
+    for (let i = 0; i < rows.length; i += PUSH_CONCURRENCY) {
+      const wave = rows.slice(i, i + PUSH_CONCURRENCY);
+      const written = await Promise.all(wave.map((row, j) => store.upsertIfNewer(kind, uid, row, first + i + j)));
+      accepted += written.filter(Boolean).length;
     }
   };
-  await push('cards', req.cards);
-  await push('bookmarks', req.bookmarks);
+  await push('cards', req.cards, seq);
+  await push('bookmarks', req.bookmarks, seq + req.cards.length);
 
   // One page across both collections, in sequence order: fetch a page of
   // each, merge, and stop at the limit so the cursor never skips a row.
-  const cards = await store.changedSince('cards', uid, req.cursor, limit + 1);
-  const bookmarks = await store.changedSince('bookmarks', uid, req.cursor, limit + 1);
+  const [cards, bookmarks] = await Promise.all([
+    store.changedSince('cards', uid, req.cursor, limit + 1),
+    store.changedSince('bookmarks', uid, req.cursor, limit + 1),
+  ]);
   const merged = [
     ...cards.map((c) => ({ kind: 'cards' as const, ...c })),
     ...bookmarks.map((b) => ({ kind: 'bookmarks' as const, ...b })),

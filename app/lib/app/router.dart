@@ -35,6 +35,7 @@ import 'package:arth/features/tools/spell_check_screen.dart';
 import 'package:arth/features/tools/tools_screen.dart';
 import 'package:arth/features/tools/translator_screen.dart';
 import 'package:arth/features/vocabulary/vocabulary_screen.dart';
+import 'package:arth/features/wordsets/word_set_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -53,6 +54,25 @@ GoRouter buildRouter({required bool needsSeed}) => GoRouter(
         GoRoute(path: '/admin', builder: (_, _) => const AdminScreen()),
         GoRoute(path: '/community/deck/:id', builder: (_, s) => PublishedDeckScreen(id: s.pathParameters['id']!)),
         GoRoute(path: '/idioms', builder: (_, _) => const IdiomsScreen()),
+        GoRoute(path: '/words', builder: (_, _) => const WordPowerScreen()),
+        // Keyed by the set: going from one kind straight to another is the
+        // same widget in the same place, and without a key Flutter keeps the
+        // old State — the antonyms round carried on asking about
+        // substitutions, and a search typed in one list stayed in the next.
+        GoRoute(
+          path: '/words/:kind',
+          builder: (_, s) {
+            final kind = wordSetKindFrom(s.pathParameters['kind']);
+            return WordSetBrowseScreen(key: ValueKey(kind), kind: kind);
+          },
+        ),
+        GoRoute(
+          path: '/words/:kind/practice',
+          builder: (_, s) {
+            final kind = wordSetKindFrom(s.pathParameters['kind']);
+            return WordSetPracticeScreen(key: ValueKey(kind), kind: kind);
+          },
+        ),
         GoRoute(path: '/idioms/all', builder: (_, _) => const IdiomsBrowseScreen()),
         GoRoute(path: '/idioms/saved', builder: (_, _) => const IdiomsBrowseScreen(savedOnly: true)),
         GoRoute(path: '/idioms/practice', builder: (_, _) => const IdiomPracticeScreen()),

@@ -7,13 +7,20 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// An image to place: [rgb] is width × height × 3 bytes, top row first.
+/// An image to place: `rgb` is width × height × 3 bytes, top row first.
+///
+/// The pixels are compressed as the image is made, not as the file is
+/// written: a long document — a book's worth of saved words, each its own
+/// picture — would otherwise hold every page's raw pixels in memory at once,
+/// which is tens of megabytes and, on a modest phone, the end of the export.
 class PdfImage {
-  PdfImage({required this.width, required this.height, required this.rgb});
+  PdfImage({required this.width, required this.height, required Uint8List rgb}) : flate = zlib.encode(rgb);
 
   final int width;
   final int height;
-  final Uint8List rgb;
+
+  /// The pixels, Flate-compressed, as they go into the file.
+  final List<int> flate;
 }
 
 /// An image placed on a page, in points from the page's top-left corner.
@@ -77,7 +84,7 @@ Uint8List buildImagePdf(List<PdfPageSpec> pages, {String title = ''}) {
       stream(
         '/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} '
         '/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode',
-        zlib.encode(img.rgb),
+        img.flate,
       );
     });
   }

@@ -232,6 +232,10 @@ class BookText {
       GoogleFonts.literata(fontSize: size, fontWeight: FontWeight.w600, color: color, height: 1.2);
 }
 
+/// A chip's label colour, which turns over when the chip fills with ink.
+WidgetStateColor _chipInk(ArthColors c) =>
+    WidgetStateColor.resolveWith((s) => s.contains(WidgetState.selected) ? c.paper : c.ink);
+
 /// The design is a single committed look per brightness.
 ThemeData arthTheme(Brightness brightness) {
   final c = brightness == Brightness.dark ? ArthColors.dark : ArthColors.light;
@@ -297,15 +301,15 @@ ThemeData arthTheme(Brightness brightness) {
       // secondaryLabelStyle does not do this: it is for a chip's second label,
       // not its selected state, so the text stayed ink-on-ink and all that
       // could be seen of a selected chip was the checkmark.
-      labelStyle: WidgetStateTextStyle.resolveWith(
-        (s) => EnglishText.label(s.contains(WidgetState.selected) ? c.paper : c.ink),
-      ),
-      // Mirrors labelStyle rather than being a flat paper: Material reaches
-      // for this one in states we don't control, and a fixed paper label on an
-      // unselected (card-filled) chip is white on white.
-      secondaryLabelStyle: WidgetStateTextStyle.resolveWith(
-        (s) => EnglishText.label(s.contains(WidgetState.selected) ? c.paper : c.ink),
-      ),
+      //
+      // The state has to ride on the *colour*, not on the style: a chip keeps
+      // only `labelStyle.color` for resolving (RawChip does
+      // `style.copyWith(color: resolveAs(style.color))`), so a
+      // WidgetStateTextStyle here is flattened to its base — which carries
+      // nothing. The label then had no colour and no font at all, and text
+      // with no colour paints white: unreadable on an unselected chip.
+      labelStyle: EnglishText.label(_chipInk(c)),
+      secondaryLabelStyle: EnglishText.label(_chipInk(c)),
       checkmarkColor: c.paper,
       surfaceTintColor: Colors.transparent,
     ),

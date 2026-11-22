@@ -202,6 +202,27 @@ describe('sync', () => {
     assert.equal(new Set(seen).size, 8);
   });
 
+  test('a batch wider than one push wave keeps every row, each with its own place in the sequence', async () => {
+    const s = memoryAccountStore();
+    await s.insertUser({ uid: 'g', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
+    // More rows than go up at once: a first sync sends hundreds.
+    const rows = Array.from({ length: 70 }, (_, i) => card(id(300 + i), 10));
+    const push = await sync(s, 'g', { cursor: 0, cards: rows, bookmarks: [] });
+    assert.equal(push.accepted, 70);
+
+    // Another device reads them a page at a time: every row, once, no gap.
+    const seen: string[] = [];
+    let cursor = 0;
+    for (let i = 0; i < 20; i++) {
+      const page = await sync(s, 'g', { cursor, cards: [], bookmarks: [] }, 16);
+      seen.push(...page.cards.map((c) => c.id));
+      cursor = page.cursor;
+      if (!page.more) break;
+    }
+    assert.equal(seen.length, 70);
+    assert.equal(new Set(seen).size, 70);
+  });
+
   test('rejects malformed rows', async () => {
     const res = await app.inject({ method: 'POST', url: '/v1/sync', headers: as('carol'), payload: { cursor: 0, cards: [{ id: id(9), kind: 'poem' }] } });
     assert.equal(res.statusCode, 400);

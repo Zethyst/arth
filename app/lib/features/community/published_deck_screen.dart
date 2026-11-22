@@ -11,6 +11,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/community.dart';
 import 'package:arth/features/cards/card_face.dart';
+import 'package:arth/features/cards/quote_image.dart';
 import 'package:arth/features/community/community_lock.dart';
 import 'package:arth/features/community/community_screen.dart';
 import 'package:arth/features/library/book_cover.dart';
@@ -357,7 +358,28 @@ class _PublishedDeckScreenState extends ConsumerState<PublishedDeckScreen> {
             sliver: SliverList.separated(
               itemCount: d.cards.length,
               separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => CardTile(card: d.cards[i].asFlashcard(i), showLocation: true, font: d.summary.font),
+              itemBuilder: (_, i) {
+                final card = d.cards[i].asFlashcard(i);
+                return CardTile(
+                  card: card,
+                  showLocation: true,
+                  font: d.summary.font,
+                  shareTooltip: t.shareQuote,
+                  onShare: (origin) => unawaited(
+                    shareQuoteImage(
+                      context,
+                      ref,
+                      card: card,
+                      bookTitle: s.bookTitle,
+                      // Whose recap it is, unless the sender is reading
+                      // their own.
+                      sharedBy: d.mine ? null : s.author.name,
+                      font: s.font,
+                      origin: origin,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           SliverToBoxAdapter(

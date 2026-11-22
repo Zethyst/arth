@@ -12,6 +12,7 @@ import 'package:arth/core/models/contracts.dart';
 import 'package:arth/core/reading_stats.dart';
 import 'package:arth/core/reading_tracker.dart';
 import 'package:arth/core/text/phrase_windows.dart';
+import 'package:arth/core/text/word_sets.dart';
 import 'package:arth/core/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -107,6 +108,11 @@ class Book {
 /// are not what somebody searching a meaning is reaching for.
 const int kIndexedSenses = 5;
 
+/// How many values one `IN (…)` list may carry. Sqlite's own limit on bound
+/// variables is 999 on the oldest Android it ships on; long lists are asked
+/// for in chunks of this size.
+const int _inChunk = 400;
+
 /// Anything that separates words in a Hindi gloss: spaces, the danda, and the
 /// punctuation the meanings are written with.
 final RegExp _termSplit = RegExp(r'[\s,;।|/()\[\]–—-]+');
@@ -132,6 +138,60 @@ Set<String> meaningTerms(String entryJson) {
     return out;
   }
   return out;
+}
+
+/// One synonym, antonym or one-word substitution as the phone holds it:
+/// what was derived from the dictionary (core/text/word_sets.dart) and how
+/// the reader is getting on with it.
+class WordSetRow {
+  const WordSetRow({
+    required this.kind,
+    required this.word,
+    required this.answer,
+    required this.others,
+    required this.hi,
+    required this.meaning,
+    required this.freqRank,
+    this.saved = false,
+    this.seenAt,
+    this.rightCount = 0,
+    this.wrongCount = 0,
+  });
+
+  factory WordSetRow.fromRow(Map<String, Object?> r) {
+    final others = (r['others'] as String?) ?? '';
+    final seen = r['seen_at'] as int?;
+    return WordSetRow(
+      kind: WordSetKind.values.byName(r['kind']! as String),
+      word: r['word']! as String,
+      answer: r['answer']! as String,
+      others: others.isEmpty ? const [] : others.split('\u001f'),
+      hi: (r['hi'] as String?) ?? '',
+      meaning: (r['meaning'] as String?) ?? '',
+      freqRank: (r['freq_rank'] as int?) ?? 0,
+      saved: (r['saved'] as int?) == 1,
+      seenAt: seen == null ? null : DateTime.fromMillisecondsSinceEpoch(seen),
+      rightCount: (r['right_count'] as int?) ?? 0,
+      wrongCount: (r['wrong_count'] as int?) ?? 0,
+    );
+  }
+
+  final WordSetKind kind;
+  final String word;
+  final String answer;
+  final List<String> others;
+  final String hi;
+  final String meaning;
+  final int freqRank;
+  final bool saved;
+  final DateTime? seenAt;
+  final int rightCount;
+  final int wrongCount;
+
+  String get id => '${kind.name}:$word';
+
+  /// Every word that would be right, the asked-for one first.
+  List<String> get allAnswers => [answer, ...others];
 }
 
 /// What kind of phrase a row on the idioms screen is. A phrasal verb is a
@@ -485,7 +545,7 @@ class Bookmark {
 class LocalStore {
   LocalStore._(this._db);
 
-  static const _schemaVersion = 13;
+  static const _schemaVersion = 14;
 
   final Database _db;
 
@@ -561,6 +621,10 @@ class LocalStore {
             await _createMeaningTerms(db);
             await _indexMeanings(db);
           }
+          if (from < 14) {
+            await _createWordSets(db);
+            await _indexWordSets(db);
+          }
           if ((from == 11 || from == 12) && await _hasTable(db, 'idioms')) {
             // Phrasal verbs share the idioms table, marked as what they are.
             await db.execute("ALTER TABLE idioms ADD COLUMN kind TEXT NOT NULL DEFAULT 'idiom'");
@@ -582,7 +646,7 @@ class LocalStore {
   /// Whether [name] is a table in this database. Upgrades reach databases
   /// that were interrupted or sideloaded, so a step never assumes a table it
   /// did not create in the same run.
-  static Future<bool> _hasTable(Database db, String name) async {
+  static Future<bool> _hasTable(DatabaseExecutor db, String name) async {
     final rows = await db.rawQuery(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
       [name],
@@ -620,6 +684,82 @@ class LocalStore {
             'meaning_terms',
             {'term': term, 'word': r['word']! as String},
             conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
+      }
+      await batch.commit(noResult: true);
+      if (rows.length < page) break;
+    }
+  }
+
+  /// Synonyms, antonyms and one-word substitutions. Like `idioms`, the set
+  /// itself is derived data and is rebuilt wholesale, while progress is the
+  /// reader's own and is never touched by a rebuild.
+  static Future<void> _createWordSets(Database db) async {
+    await db.execute('''
+      CREATE TABLE word_sets (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        word TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        others TEXT NOT NULL DEFAULT '',
+        hi TEXT NOT NULL DEFAULT '',
+        meaning TEXT NOT NULL DEFAULT '',
+        freq_rank INTEGER NOT NULL
+      )''');
+    await db.execute('CREATE INDEX word_sets_kind ON word_sets(kind, freq_rank)');
+    await db.execute('''
+      CREATE TABLE word_set_progress (
+        id TEXT PRIMARY KEY,
+        saved INTEGER NOT NULL DEFAULT 0,
+        seen_at INTEGER,
+        right_count INTEGER NOT NULL DEFAULT 0,
+        wrong_count INTEGER NOT NULL DEFAULT 0
+      )''');
+    await db.execute('CREATE INDEX word_set_progress_saved ON word_set_progress(saved, seen_at)');
+  }
+
+  /// Fills [_createWordSets] from the entries already on the phone. Nothing
+  /// is downloaded: the synonyms, antonyms and definitions are inside the
+  /// entries, so this is a read of what is already here.
+  ///
+  /// Every word's rank is loaded first, because which synonym is worth
+  /// asking for depends on how well known it is, and an entry lists them in
+  /// the order Wiktionary happened to.
+  static Future<void> _indexWordSets(DatabaseExecutor db) async {
+    if (!await _hasTable(db, 'entries')) return;
+    final ranks = <String, int>{
+      for (final r in await db.query('entries', columns: ['word', 'freq_rank']))
+        r['word']! as String: r['freq_rank']! as int,
+    };
+    if (ranks.isEmpty) return;
+    const page = 2000;
+    for (var offset = 0;; offset += page) {
+      final rows = await db.query('entries', columns: ['word', 'freq_rank', 'json'], limit: page, offset: offset);
+      if (rows.isEmpty) break;
+      final batch = db.batch();
+      for (final r in rows) {
+        final word = r['word']! as String;
+        final items = wordSetsFromEntry(
+          word: word,
+          freqRank: r['freq_rank']! as int,
+          entry: jsonDecode(r['json']! as String) as Map<String, dynamic>,
+          rankOf: (w) => ranks[w],
+        );
+        for (final i in items) {
+          batch.insert(
+            'word_sets',
+            {
+              'id': i.id,
+              'kind': i.kind.name,
+              'word': i.word,
+              'answer': i.answer,
+              'others': i.others.join('\u001f'),
+              'hi': i.hi,
+              'meaning': i.meaning,
+              'freq_rank': i.freqRank,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
       }
@@ -673,6 +813,7 @@ class LocalStore {
         token_count INTEGER NOT NULL
       )''');
     await db.execute('CREATE INDEX phrases_first ON phrases(first_token)');
+    await _createWordSets(db);
     await _createIdioms(db);
     await _createMeaningTerms(db);
     await db.execute('''
@@ -958,6 +1099,56 @@ class LocalStore {
     await _db.insert('idiom_progress', {'phrase': phrase}, conflictAlgorithm: ConflictAlgorithm.ignore);
     final column = correct ? 'right_count' : 'wrong_count';
     await _db.rawUpdate('UPDATE idiom_progress SET $column = $column + 1 WHERE phrase = ?', [phrase]);
+  }
+
+  // ---- synonyms, antonyms, one-word substitutions ----
+
+  /// Every item of [kind], best known first. A few thousand per kind, so the
+  /// screens hold the list and filter it in memory, as the idioms do.
+  Future<List<WordSetRow>> wordSets(WordSetKind kind) async {
+    final rows = await _db.rawQuery('''
+      SELECT w.kind, w.word, w.answer, w.others, w.hi, w.meaning, w.freq_rank,
+             p.saved, p.seen_at, p.right_count, p.wrong_count
+        FROM word_sets w
+        LEFT JOIN word_set_progress p ON p.id = w.id
+       WHERE w.kind = ?
+       ORDER BY w.freq_rank ASC, w.word ASC''', [kind.name]);
+    return [for (final r in rows) WordSetRow.fromRow(r)];
+  }
+
+  Future<int> wordSetCount(WordSetKind kind) async => Sqflite.firstIntValue(
+        await _db.rawQuery('SELECT COUNT(*) FROM word_sets WHERE kind = ?', [kind.name]),
+      ) ??
+      0;
+
+  /// Derives the sets again from the entries on the phone: after a seed
+  /// download brings new words, or the first time a reader opens them on a
+  /// phone whose dictionary arrived before this existed. Progress is keyed
+  /// by id and survives.
+  /// In one transaction: until it commits, every reader still sees the old
+  /// sets. Deleting first and filling after would show a screen opened
+  /// mid-rebuild a half-built list, and a crash would leave one on disk.
+  Future<void> rebuildWordSets() => _db.transaction((tx) async {
+        await tx.delete('word_sets');
+        await _indexWordSets(tx);
+      });
+
+  Future<void> setWordSetSaved(String id, {required bool saved}) async {
+    await _db.insert('word_set_progress', {'id': id, 'saved': saved ? 1 : 0}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await _db.update('word_set_progress', {'saved': saved ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> markWordSetSeen(String id, {int? at}) async {
+    final when = at ?? DateTime.now().millisecondsSinceEpoch;
+    await _db.insert('word_set_progress', {'id': id, 'seen_at': when}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    await _db.update('word_set_progress', {'seen_at': when}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Records one practice answer.
+  Future<void> recordWordSetAnswer(String id, {required bool correct}) async {
+    await _db.insert('word_set_progress', {'id': id}, conflictAlgorithm: ConflictAlgorithm.ignore);
+    final column = correct ? 'right_count' : 'wrong_count';
+    await _db.rawUpdate('UPDATE word_set_progress SET $column = $column + 1 WHERE id = ?', [id]);
   }
 
   /// Prefix search over headwords for the dictionary screen.
@@ -1568,25 +1759,52 @@ class LocalStore {
 
   /// Applies rows from the server, newer-wins against what's here. A row
   /// attaches to the local book with its content key, if there is one.
+  ///
+  /// A page is up to 500 rows of each kind, and every statement is a round
+  /// trip to the platform's sqlite: what the page needs to know — which rows
+  /// are already here, and which book each one belongs to — is asked once for
+  /// the whole page, and the writes go in one batch.
   Future<void> applyRemote({required List<Map<String, Object?>> cards, required List<Map<String, Object?>> bookmarks}) async {
     if (cards.isEmpty && bookmarks.isEmpty) return;
     await _db.transaction((tx) async {
-      final bookIds = <String, int?>{};
-      Future<int?> bookFor(Object? key) async {
-        if (key is! String) return null;
-        if (bookIds.containsKey(key)) return bookIds[key];
-        final rows = await tx.query('books', columns: ['id'], where: 'content_key = ?', whereArgs: [key], limit: 1);
-        return bookIds[key] = rows.isEmpty ? null : rows.first['id']! as int;
+      // The `updated_at` already stored for these rows, by id; a row that
+      // isn't here yet is absent.
+      Future<Map<String, int>> stamps(String table, List<Map<String, Object?>> rows) async {
+        final out = <String, int>{};
+        for (var i = 0; i < rows.length; i += _inChunk) {
+          final ids = [for (final r in rows.skip(i).take(_inChunk)) r['id']];
+          final marks = List.filled(ids.length, '?').join(',');
+          final found = await tx.rawQuery('SELECT id, updated_at FROM $table WHERE id IN ($marks)', ids);
+          for (final r in found) {
+            out[r['id']! as String] = r['updated_at']! as int;
+          }
+        }
+        return out;
       }
 
-      Future<bool> newer(String table, Map<String, Object?> r) async {
-        final local = await tx.query(table, columns: ['updated_at'], where: 'id = ?', whereArgs: [r['id']]);
-        return local.isEmpty || (local.first['updated_at']! as int) < (r['updatedAt']! as int);
+      final here = {'flashcards': await stamps('flashcards', cards), 'bookmarks': await stamps('bookmarks', bookmarks)};
+      bool newer(String table, Map<String, Object?> r) {
+        final local = here[table]![r['id']];
+        return local == null || local < (r['updatedAt']! as int);
       }
 
+      // The books these rows belong to, by content key: a handful at most.
+      final bookIds = <String, int>{};
+      final keys = {for (final r in [...cards, ...bookmarks]) if (r['bookKey'] is String) r['bookKey']! as String};
+      for (var i = 0; i < keys.length; i += _inChunk) {
+        final slice = keys.skip(i).take(_inChunk).toList();
+        final marks = List.filled(slice.length, '?').join(',');
+        final rows = await tx.rawQuery('SELECT id, content_key FROM books WHERE content_key IN ($marks)', slice);
+        for (final r in rows) {
+          bookIds[r['content_key']! as String] = r['id']! as int;
+        }
+      }
+      int? bookFor(Object? key) => key is String ? bookIds[key] : null;
+
+      final batch = tx.batch();
       for (final r in cards) {
-        if (!await newer('flashcards', r)) continue;
-        await tx.insert(
+        if (!newer('flashcards', r)) continue;
+        batch.insert(
           'flashcards',
           {
             'id': r['id'],
@@ -1595,7 +1813,7 @@ class LocalStore {
             'back': r['back'] ?? '',
             'note': r['note'] ?? '',
             'context': r['context'],
-            'book_id': await bookFor(r['bookKey']),
+            'book_id': bookFor(r['bookKey']),
             'book_key': r['bookKey'],
             'book_title': r['bookTitle'],
             'page': r['page'],
@@ -1612,12 +1830,12 @@ class LocalStore {
         );
       }
       for (final r in bookmarks) {
-        if (!await newer('bookmarks', r)) continue;
-        await tx.insert(
+        if (!newer('bookmarks', r)) continue;
+        batch.insert(
           'bookmarks',
           {
             'id': r['id'],
-            'book_id': await bookFor(r['bookKey']),
+            'book_id': bookFor(r['bookKey']),
             'book_key': r['bookKey'],
             'book_title': r['bookTitle'],
             'page': r['page'],
@@ -1632,6 +1850,7 @@ class LocalStore {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+      await batch.commit(noResult: true);
     });
   }
 

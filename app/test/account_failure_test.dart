@@ -29,7 +29,8 @@ class _User implements User {
 class _Server implements HttpClientAdapter {
   _Server(this.failures, {this.tier = 'super'});
 
-  final String tier;
+  /// Mutable: an admin can grant a plan while the app is open.
+  String tier;
   int failures;
   int calls = 0;
 
@@ -118,6 +119,25 @@ void main() {
     await container.read(syncProvider.notifier).run();
 
     expect((await container.read(accountProvider.future))?.tier, Tier.superTier);
+    expect(container.read(communityAccessProvider), CommunityAccess.open);
+  });
+
+  test('a plan granted while the app is open arrives with the next sync', () async {
+    sqfliteFfiInit();
+    final path = '${await databaseFactoryFfi.getDatabasesPath()}/account_upgrade_test.db';
+    await databaseFactoryFfi.deleteDatabase(path);
+    final store = await LocalStore.openAt(path, factory: databaseFactoryFfi);
+
+    final server = _Server(0, tier: 'free');
+    final container = _container(server, extra: [localStoreProvider.overrideWithValue(store)]);
+    expect((await container.read(accountProvider.future))?.tier, Tier.free);
+    expect(container.read(communityAccessProvider), CommunityAccess.locked);
+
+    server.tier = 'super'; // granted on the server, as every plan is
+
+    await container.read(syncProvider.notifier).run(withProfile: true);
+
+    expect(container.read(accountProvider).valueOrNull?.tier, Tier.superTier);
     expect(container.read(communityAccessProvider), CommunityAccess.open);
   });
 

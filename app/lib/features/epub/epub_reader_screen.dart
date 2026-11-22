@@ -32,6 +32,7 @@ import 'package:arth/features/cards/card_editor.dart';
 import 'package:arth/features/cards/deck_screen.dart';
 import 'package:arth/features/epub/epub_paragraph.dart';
 import 'package:arth/features/reader/bookmarks_sheet.dart';
+import 'package:arth/features/reader/cover_page.dart';
 import 'package:arth/features/reader/curl/book_pager.dart';
 import 'package:arth/features/reader/details_sheet.dart';
 import 'package:arth/features/reader/flick_physics.dart';
@@ -87,6 +88,15 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
   bool _openFailed = false;
   PageController? _pager;
   int _chapter = 0;
+
+  /// On the cover, the page before the book's first page: a book that has
+  /// never been opened starts there, and turning (or swiping) back from the
+  /// first page returns to it.
+  late bool _onCover = widget.initialPlace == null && widget.book.lastOpenedAt == null && widget.book.lastPage <= 1;
+
+  /// Scrolling mode: the chapter on screen is at its top, so a swipe back
+  /// there is a swipe back to the cover and not just a stray sideways drag.
+  bool _atChapterTop = true;
 
   /// Scroll offset to restore when the chapter first builds, if it is the
   /// chapter the reader left off in.
@@ -158,6 +168,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
     } else if (parts != null && parts.length == 2 && int.tryParse(parts[0]) == chapter) {
       _restoreChapter = chapter;
       _restoreOffset = double.tryParse(parts[1]) ?? 0;
+      _atChapterTop = _restoreOffset <= 8;
     }
     setState(() {
       _epub = epub;
@@ -374,6 +385,15 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
   }
 
   Future<void> _turnBook({required bool next}) async {
+    // The cover is the page before the first one.
+    if (_onCover) {
+      if (next) setState(() => _onCover = false);
+      return;
+    }
+    if (!next && _chapter == 0 && _bookPage == 0) {
+      setState(() => _onCover = true);
+      return;
+    }
     final target = await _neighbourPage(next: next);
     if (target != null) await _goToBookPage(target.chapter, target.page);
   }
@@ -386,12 +406,36 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
 
   /// A picture of the page next to this one, drawn the way the live page is.
   Future<ui.Image?> _bookSnapshot({required bool next, required Size size}) async {
-    final epub = _epub;
+    // Either side of the cover: the page the reader is about to open, or the
+    // cover itself.
+    if (_onCover) return next ? _pagePicture(chapter: _chapter, page: _bookPage, size: size) : null;
+    if (!next && _chapter == 0 && _bookPage == 0) return _coverPicture(size);
     final target = await _neighbourPage(next: next);
-    if (epub == null || target == null) return null;
-    final pages = await _pagesOf(target.chapter);
+    return target == null ? null : _pagePicture(chapter: target.chapter, page: target.page, size: size);
+  }
+
+  /// The cover, drawn as the curl's picture of the page before the first one.
+  Future<ui.Image?> _coverPicture(Size size) async {
+    if (!mounted) return null;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder)..scale(dpr);
+    paintCoverPage(
+      canvas,
+      Size(size.width / dpr, size.height / dpr),
+      title: widget.book.title,
+      c: context.colors,
+      photo: ref.read(coverArtProvider(widget.book.title)).valueOrNull,
+    );
+    return recorder.endRecording().toImage(size.width.toInt(), size.height.toInt());
+  }
+
+  Future<ui.Image?> _pagePicture({required int chapter, required int page, required Size size}) async {
+    final epub = _epub;
+    if (epub == null) return null;
+    final pages = await _pagesOf(chapter);
     if (pages == null || !mounted) return null;
-    final blocks = await epub.chapter(target.chapter);
+    final blocks = await epub.chapter(chapter);
     if (!mounted) return null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final c = context.colors;
@@ -403,7 +447,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
       canvas,
       blocks: blocks,
       pages: pages,
-      page: target.page,
+      page: page,
       width: _viewport.width,
       origin: const Offset(0, _pageTopInset),
       scaler: MediaQuery.textScalerOf(context),
@@ -420,6 +464,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
 
   void _onChapterChanged(int i) {
     _dismiss();
+    _atChapterTop = true;
     setState(() {
       _chapter = i;
       _visible = null;
@@ -946,12 +991,15 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
     final bookMode = ref.watch(settingsProvider.select((s) => s.bookPages));
     // A page for the habit log: a chapter's page when paged, else the chapter.
     if (epub != null) trackPage(bookMode ? _chapter * 100000 + _bookPage : _chapter);
+    // The cover the library found for this book, if any; the cover page draws
+    // the printed one without it.
+    final coverArt = ref.watch(coverArtProvider(widget.book.title)).valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.book.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          if (epub != null)
+          if (epub != null && !_onCover)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Center(child: Text('${_chapter + 1} / ${epub.chapterCount}', style: EnglishText.label(c.inkMuted))),
@@ -1012,6 +1060,7 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
                     NotificationListener<ScrollNotification>(
                   onNotification: (n) {
                     if (n is ScrollEndNotification && n.metrics.axis == Axis.vertical) _onScrollEnd(n.metrics);
+                    if (n.metrics.axis == Axis.vertical) _atChapterTop = n.metrics.pixels <= 8;
                     // The follower's above/below decision tracks the anchor.
                     if (n is ScrollUpdateNotification && tooltip != null) _afterLayout(() => setState(() {}));
                     return false;
@@ -1059,21 +1108,54 @@ class _EpubReaderScreenState extends ConsumerState<EpubReaderScreen> with AdBrea
                     if (bookMode)
                       BookPager(
                         controller: _bookPager,
-                        enabled: here != null,
-                        position: (_chapter, _bookPage),
-                        hasNext: here != null && (_bookPage + 1 < here.count || _chapter + 1 < epub.chapterCount),
-                        hasPrevious: here != null && (_bookPage > 0 || _chapter > 0),
+                        enabled: _onCover || here != null,
+                        // The cover is the page before the first one: forward
+                        // from it opens the book, back from the first page
+                        // returns to it.
+                        position: _onCover ? 'cover' : (_chapter, _bookPage),
+                        hasNext: _onCover || (here != null && (_bookPage + 1 < here.count || _chapter + 1 < epub.chapterCount)),
+                        hasPrevious: !_onCover && here != null,
                         paper: c.paper,
                         snapshot: _bookSnapshot,
                         onTurn: _turnBook,
                         canStart: () => _selection == null && _editing == null,
-                        child: ColoredBox(
-                          color: c.paper,
-                          child: Padding(padding: const EdgeInsets.only(top: _pageTopInset, bottom: _pageBottomInset), child: pageView),
+                        child: Stack(
+                          fit: StackFit.passthrough,
+                          children: [
+                            ColoredBox(
+                              color: c.paper,
+                              child: Padding(padding: const EdgeInsets.only(top: _pageTopInset, bottom: _pageBottomInset), child: pageView),
+                            ),
+                            // Inside the pager: its picture of the page being
+                            // turned is taken from what is on screen.
+                            if (_onCover)
+                              Positioned.fill(
+                                child: CoverPage(
+                                  title: widget.book.title,
+                                  photo: coverArt,
+                                  onTap: () => unawaited(_bookPager.turn(forward: true)),
+                                ),
+                              ),
+                          ],
                         ),
                       )
-                    else
-                      pageView,
+                    else ...[
+                      // Scrolling mode: the cover slides off when the book
+                      // starts, and a swipe back at the start brings it back.
+                      CoverSwipeBack(
+                        enabled: !_onCover && _chapter == 0 && _atChapterTop && _selection == null && _editing == null,
+                        onBack: () => setState(() => _onCover = true),
+                        child: pageView,
+                      ),
+                      Positioned.fill(
+                        child: CoverSheet(
+                          title: widget.book.title,
+                          photo: coverArt,
+                          showing: _onCover,
+                          onOpen: () => setState(() => _onCover = false),
+                        ),
+                      ),
+                    ],
                 OverlayPortal(
                   controller: _portal,
                   overlayChildBuilder: (_) => TooltipFollower(

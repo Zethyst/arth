@@ -38,4 +38,26 @@ void main() {
     const out = String.fromEnvironment('PDF_OUT');
     if (out.isNotEmpty) File(out).writeAsBytesSync(bytes);
   });
+
+  testWidgets("a book's saved words become a PDF, one picture per word", (tester) async {
+    GoogleFonts.config.allowRuntimeFetching = false;
+    final words = [
+      for (var i = 0; i < 12; i++)
+        SavedWord(
+          lemma: i.isEven ? 'solitude' : 'propriety',
+          meaning: 'एकांत — अकेले रहने की अवस्था',
+          // A word saved from the dictionary has no sentence behind it.
+          sentence: i % 3 == 0 ? null : 'He had lived in solitude for eleven years.',
+          bookId: 1,
+          bookTitle: 'The Lighthouse Keeper',
+          savedAt: DateTime(2026, 9, 2),
+        ),
+    ];
+    final bytes = await tester.runAsync(
+      () => buildWordsPdf(bookTitle: 'The Lighthouse Keeper', words: words, strings: AppStrings.en, scale: 1),
+    );
+    final text = latin1.decode(bytes!);
+    expect(text, startsWith('%PDF-1.4'));
+    expect(RegExp('/Subtype /Image').allMatches(text), hasLength(words.length + 1)); // + the title block
+  });
 }

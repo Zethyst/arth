@@ -246,7 +246,16 @@ class _DeckScreenState extends ConsumerState<DeckScreen> {
                       for (final card in group)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: CardTile(card: card, onTap: () => showCardEditor(context, existing: card)),
+                          child: CardTile(
+                            card: card,
+                            onTap: () => showCardEditor(context, existing: card),
+                            // Word cards stay private study aids, as in a
+                            // whole recap: they are never offered.
+                            onShare: card.kind == CardKind.word
+                                ? null
+                                : (_) => unawaited(shareRecap(context, ref, bookTitle: title, bookKey: book?.contentKey ?? card.bookKey, cards: [card])),
+                            shareTooltip: t.shareQuoteToCommunity,
+                          ),
                         ),
                     ],
                   );

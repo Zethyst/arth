@@ -29,6 +29,7 @@ import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/cards/card_editor.dart';
 import 'package:arth/features/cards/deck_screen.dart';
 import 'package:arth/features/reader/bookmarks_sheet.dart';
+import 'package:arth/features/reader/cover_page.dart';
 import 'package:arth/features/reader/curl/book_pager.dart';
 import 'package:arth/features/reader/details_sheet.dart';
 import 'package:arth/features/reader/flick_physics.dart';
@@ -93,6 +94,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
   /// null = not checked yet; true = the first pages had no text at all.
   bool? _documentIsScanned;
   int? _page;
+
+  /// On the cover, the page before page 1: a book that has never been opened
+  /// starts there, and turning back from page 1 returns to it. In scrolling
+  /// mode the cover is a band above the first page, so this only follows
+  /// where the reader is (see _coverBand).
+  late bool _onCover = widget.initialPage == null && widget.book.lastOpenedAt == null && widget.book.lastPage <= 1;
+
+  /// Scrolling mode: the cover is still waiting to be scrolled into view.
+  late bool _coverToPlace = _onCover;
 
   /// The word range behind the sentence card, when it came from a selection
   /// we could place; the card's colour row highlights it.
@@ -347,6 +357,31 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     // The overlay target moves with the document; rebuild so the follower's
     // above/below decision and clamp track it.
     if (mounted && ref.read(readerControllerProvider) != null) _afterLayout(() => setState(() {}));
+    _followCover();
+  }
+
+  /// Scrolling mode: the reader is on the cover while its band still covers
+  /// the top half of the view. Followed so that switching to reading mode
+  /// stays on the page the reader was on.
+  void _followCover() {
+    final band = _coverBand;
+    final box = _viewerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (band == null || box == null || !box.hasSize || !mounted) return;
+    final on = _docToViewer(band).bottom > box.size.height / 2;
+    if (on != _onCover) _afterLayout(() => setState(() => _onCover = on));
+  }
+
+  /// Scrolling mode: bring the cover into view. pdfrx lays its pages out a
+  /// beat after it reports ready, so this is tried as the layout lands.
+  void _goToCover() {
+    for (final ms in const [0, 150, 400]) {
+      Future<void>.delayed(Duration(milliseconds: ms), () {
+        final band = _coverBand;
+        if (!mounted || band == null || !_coverToPlace) return;
+        _coverToPlace = false;
+        unawaited(_controller.goTo(_controller.calcMatrixFor(band.center), duration: Duration.zero));
+      });
+    }
   }
 
   /// pdfrx can notify from its own layout, when neither setState nor the
@@ -386,6 +421,50 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
       x += page.width + gap;
     }
     return PdfPageLayout(pageLayouts: layouts, documentSize: Size(math.max(0, x - gap), height));
+  }
+
+  // ---- the cover page ----
+
+  /// The gap pdfrx leaves around the pages when they scroll.
+  static const _scrollMargin = 8.0;
+
+  /// Scrolling mode: pdfrx's own layout (a column of pages), with a page-sized
+  /// band above the first one. The cover is drawn there, so it is scrolled
+  /// past and scrolled back to like any other page.
+  static PdfPageLayout _scrollLayout(List<PdfPage> pages, PdfViewerParams params) {
+    if (pages.isEmpty) return PdfPageLayout(pageLayouts: const [], documentSize: Size.zero);
+    final width = pages.fold<double>(0, (w, p) => math.max(w, p.width)) + params.margin * 2;
+    final layouts = <Rect>[];
+    var y = params.margin + pages.first.height + params.margin;
+    for (final page in pages) {
+      layouts.add(Rect.fromLTWH((width - page.width) / 2, y, page.width, page.height));
+      y += page.height + params.margin;
+    }
+    return PdfPageLayout(pageLayouts: layouts, documentSize: Size(width, y));
+  }
+
+  /// Where the cover sits in the document, in scrolling mode.
+  Rect? get _coverBand {
+    final layout = _layoutOrNull;
+    if (_bookMode || layout == null || layout.pageLayouts.isEmpty) return null;
+    final first = layout.pageLayouts.first;
+    return Rect.fromLTWH(first.left, _scrollMargin, first.width, first.height);
+  }
+
+  /// The cover, drawn as the curl's picture of the page before page 1.
+  Future<ui.Image?> _coverSnapshot(Size pixels) async {
+    if (!mounted) return null;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder)..scale(dpr);
+    paintCoverPage(
+      canvas,
+      Size(pixels.width / dpr, pixels.height / dpr),
+      title: widget.book.title,
+      c: context.colors,
+      photo: ref.read(coverArtProvider(widget.book.title)).valueOrNull,
+    );
+    return recorder.endRecording().toImage(pixels.width.toInt(), pixels.height.toInt());
   }
 
   static double? _fitPage(PdfDocument document, PdfViewerController controller, double fitZoom, double coverZoom) => fitZoom;
@@ -669,6 +748,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
     final page = cache.pageAt(docPos);
     final rc = ref.read(readerControllerProvider.notifier);
     if (page == null) {
+      // Scrolling mode: a tap on the cover starts the book.
+      if (_coverBand?.contains(docPos) ?? false) {
+        await _controller.goToPage(pageNumber: 1);
+        return;
+      }
       if (!_turnFromEdge(docPos)) rc.dismiss();
       return;
     }
@@ -1023,13 +1107,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
       _textBoxes.clear();
       _bookRef = null;
       _settleGeneration++;
+      // The cover is a band in the scrolling layout: scroll to it when that
+      // is where the reader was.
+      _coverToPlace = _onCover && !bookMode;
     }
+    // The cover the library found for this book, if any; the page draws the
+    // printed one without it.
+    final coverArt = ref.watch(coverArtProvider(widget.book.title)).valueOrNull;
+    final onCover = bookMode && _onCover;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.book.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          if (_page != null)
+          if (_page != null && !onCover)
             Center(
               child: PageCounter(
                 page: _page!,
@@ -1074,16 +1165,36 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
         children: [
           BookPager(
             controller: _pager,
-            enabled: bookMode && _page != null && _layoutOrNull != null,
-            position: _page ?? 1,
-            hasNext: (_page ?? 1) < (_controller.isReady ? _controller.pageCount : 1),
-            hasPrevious: (_page ?? 1) > 1,
+            enabled: bookMode && (onCover || (_page != null && _layoutOrNull != null)),
+            // The cover is the page before page 1: forward from it opens the
+            // book, and back from page 1 returns to it.
+            position: onCover ? 'cover' : (_page ?? 1),
+            hasNext: onCover || (_page ?? 1) < (_controller.isReady ? _controller.pageCount : 1),
+            hasPrevious: !onCover,
             paper: c.paper,
-            snapshot: ({required next, required size}) => _snapshotPage((_page ?? 1) + (next ? 1 : -1), size),
-            onTurn: ({required next}) => _showTurnedPage((_page ?? 1) + (next ? 1 : -1)),
+            snapshot: ({required next, required size}) {
+              if (onCover) return next ? _snapshotPage(1, size) : Future<ui.Image?>.value();
+              if (!next && (_page ?? 1) <= 1) return _coverSnapshot(size);
+              return _snapshotPage((_page ?? 1) + (next ? 1 : -1), size);
+            },
+            onTurn: ({required next}) async {
+              if (onCover) {
+                setState(() => _onCover = false);
+                await _showTurnedPage(1);
+                return;
+              }
+              if (!next && (_page ?? 1) <= 1) {
+                setState(() => _onCover = true);
+                return;
+              }
+              await _showTurnedPage((_page ?? 1) + (next ? 1 : -1));
+            },
             // Zoomed in, a drag pans the page; zoom out to turn it by swiping.
             canStart: () => _userZoom == 1 && !_controller.textSelectionDelegate.hasSelectedText,
-            child: _BookFilter(
+            child: Stack(
+              fit: StackFit.passthrough,
+              children: [
+            _BookFilter(
               enabled: bookMode,
               filter: _paperFilter(c),
               ready: _bookViewSet,
@@ -1099,8 +1210,8 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                   backgroundColor: bookMode ? Colors.white : c.paper,
                   boundaryMargin: bookMode ? const EdgeInsets.all(100000) : null,
                   onViewSizeChanged: (_, _, _) => _settleBookView(),
-                  margin: bookMode ? 0 : 8,
-                  layoutPages: bookMode ? _bookLayout : null,
+                  margin: bookMode ? 0 : _scrollMargin,
+                  layoutPages: bookMode ? _bookLayout : _scrollLayout,
                   sizeDelegateProvider: bookMode ? const PdfViewerSizeDelegateProviderLegacy(calculateInitialZoom: _fitPage) : null,
                   pageDropShadow: bookMode ? null : const BoxShadow(color: Colors.black54, blurRadius: 4, spreadRadius: 2, offset: Offset(2, 2)),
                   panEnabled: !bookMode || _userZoom > 1,
@@ -1135,6 +1246,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                     setState(() => _page = controller.pageNumber);
                     if (controller.pageNumber != null) trackPage(controller.pageNumber!);
                     unawaited(_prefetch(controller.pageNumber ?? 1));
+                    if (_coverToPlace && !bookMode) _goToCover();
                   },
                   onPageChanged: (p) {
                     if (p == null) return;
@@ -1159,12 +1271,32 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> with AdBreakOnClose
                           ),
                         ),
                     ...tooltipOverlays(context: ctx, tooltip: tooltip, link: _link, toLocal: _docToViewer),
+                    // Scrolling mode: the cover sits in the band the layout
+                    // leaves above page 1, and scrolls with the document.
+                    if (_coverBand case final band?)
+                      Positioned.fromRect(
+                        rect: _docToViewer(band),
+                        child: IgnorePointer(child: CoverPage(title: widget.book.title, photo: coverArt)),
+                      ),
                   ],
                 ),
           ),
             ),
+                // Reading mode: the cover over the viewer while the reader is
+                // on it. The pager's picture of the page it turns is taken
+                // from here, so it has to be inside the pager.
+                if (onCover)
+                  Positioned.fill(
+                    child: CoverPage(
+                      title: widget.book.title,
+                      photo: coverArt,
+                      onTap: () => unawaited(_pager.turn(forward: true)),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          if (bookMode && _page != null)
+          if (bookMode && _page != null && !onCover)
             Positioned(
               right: 12,
               bottom: 16 + MediaQuery.paddingOf(context).bottom,

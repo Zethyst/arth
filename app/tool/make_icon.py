@@ -1,9 +1,11 @@
 """Generate the Arth app icon for Android, iOS and the Play Store from one picture.
 
-The artwork is tool/icon-source.png: a purple rounded square (the Devanagari
-"अ" over a crescent, three cards and a circle of readers) on a cream ground.
-It is cropped to the square, its cream corners are filled in with the
-surrounding purple, and the result is scaled to every size the stores want.
+The artwork is tool/icon-source.png: a rounded square that runs from violet at
+the top left to orange at the bottom right, with a white A standing over an open
+book and the word ARTH beneath it, sitting on a white ground. It is cropped to
+the rounded square, its white corners are filled in with the colours the
+artwork carries at its own corners, and the result is scaled to every size the
+stores want.
 
 Run from app/:  python3 tool/make_icon.py     (needs Pillow and numpy)
 """
@@ -19,49 +21,54 @@ from PIL import Image, ImageDraw, ImageFilter
 
 APP = Path(__file__).resolve().parents[1]
 SOURCE = APP / "tool/icon-source.png"
-CROP = (40, 14, 659, 633)  # a square inside the source picture, clear of its side edges
-INSET = 0.025  # share of the crop's width trimmed off every edge
-SCALE = 0.95  # how much of the canvas the trimmed artwork fills
-RADIUS = 0.13  # the trimmed artwork's corner radius, as a share of its width
+CROP = (142, 231, 2455, 2404)  # the rounded square inside the source picture, without its drop shadow
+INSET = 0.035  # share of the crop's width trimmed off every edge, to lose the artwork's pale rim
+RADIUS = 0.17  # the corner the artwork is rounded to, as a share of its width
+SIDE = 1024  # the master's side, in pixels
 
 
 @lru_cache(maxsize=1)
 def master() -> Image.Image:
-    """The artwork as a 1024px opaque square. The source's cream corners and
-    pale rim are trimmed off, the rest is set a little smaller on a purple
-    field that fades between the colours at its four corners."""
+    """The artwork as a 1024px opaque square, edge to edge. The source's pale
+    rim is trimmed off and the artwork is widened to the full canvas; it is a
+    little wider than it is tall, so its top and bottom rows are drawn out to
+    fill the canvas, and its rounded corners are filled in with a field that
+    fades between the colours the artwork carries at its own four corners."""
     crop = Image.open(SOURCE).convert("RGB").crop(CROP)
     w, h = crop.size
     inset = round(w * INSET)
     crop = crop.crop((inset, inset, w - inset, h - inset))
     w, h = crop.size
-    side = round(1024 * SCALE)
-    art = crop.resize((side, round(side * h / w)), Image.LANCZOS)
+    art = crop.resize((SIDE, round(SIDE * h / w)), Image.LANCZOS)
     a = np.array(art).astype(float)
 
-    def purple(x: int, y: int) -> np.ndarray:
+    def corner(x: int, y: int) -> np.ndarray:
         return a[y - 10 : y + 10, x - 10 : x + 10].reshape(-1, 3).mean(axis=0)
 
-    near = 70
-    tl, tr = purple(near, near), purple(art.width - near, near)
-    bl, br = purple(near, art.height - near), purple(art.width - near, art.height - near)
-    u = np.linspace(0, 1, 1024)[None, :, None]
-    v = np.linspace(0, 1, 1024)[:, None, None]
+    near = 90
+    tl, tr = corner(near, near), corner(art.width - near, near)
+    bl, br = corner(near, art.height - near), corner(art.width - near, art.height - near)
+    u = np.linspace(0, 1, SIDE)[None, :, None]
+    v = np.linspace(0, 1, SIDE)[:, None, None]
     field = (tl * (1 - u) + tr * u) * (1 - v) + (bl * (1 - u) + br * u) * v
 
+    top = (SIDE - art.height) // 2
+    full = np.empty((SIDE, SIDE, 3))
+    full[top : top + art.height] = a
+    full[:top] = a[0]
+    full[top + art.height :] = a[-1]
+
     k = 2
-    mask = Image.new("L", (art.width * k, art.height * k), 0)
-    radius = round(art.width * RADIUS * k)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, art.width * k - 1, art.height * k - 1), radius=radius, fill=255)
-    mask = mask.resize(art.size, Image.LANCZOS).filter(ImageFilter.GaussianBlur(4))
-    out = Image.fromarray(field.round().astype("uint8"), "RGB")
-    out.paste(art, ((1024 - art.width) // 2, (1024 - art.height) // 2), mask)
-    return out
+    mask = Image.new("L", (SIDE * k, SIDE * k), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, SIDE * k - 1, SIDE * k - 1), radius=round(SIDE * RADIUS * k), fill=255)
+    mask = mask.resize((SIDE, SIDE), Image.LANCZOS).filter(ImageFilter.GaussianBlur(3))
+    m = (np.array(mask).astype(float) / 255)[:, :, None]
+    return Image.fromarray((full * m + field * (1 - m)).round().astype("uint8"), "RGB")
 
 
 @lru_cache(maxsize=1)
 def ground() -> tuple[int, int, int]:
-    """The purple at the icon's edge: the adaptive icon's background colour."""
+    """The colour at the icon's edge: the adaptive icon's background colour."""
     a = np.array(master()).astype(float)
     edge = np.concatenate([a[8:40, 100:924].reshape(-1, 3), a[984:1016, 100:924].reshape(-1, 3)])
     return tuple(int(v) for v in edge.mean(axis=0))

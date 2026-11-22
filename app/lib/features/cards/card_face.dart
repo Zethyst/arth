@@ -69,6 +69,30 @@ class CardMeta extends ConsumerWidget {
   }
 }
 
+/// The share button in a tile's corner. It reports where it is so the share
+/// sheet has somewhere to point from on an iPad.
+class _ShareCorner extends StatelessWidget {
+  const _ShareCorner({required this.tooltip, required this.onShare});
+
+  final String? tooltip;
+  final void Function(Rect origin) onShare;
+
+  @override
+  Widget build(BuildContext context) => Builder(
+        builder: (button) => IconButton(
+          tooltip: tooltip,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 34, minHeight: 28),
+          icon: Icon(Icons.ios_share_rounded, size: 17, color: button.colors.inkMuted),
+          onPressed: () {
+            final box = button.findRenderObject() as RenderBox?;
+            onShare(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
+          },
+        ),
+      );
+}
+
 /// The paper: card colour, ruled lines, margin, ink edge, hard shadow.
 class IndexCard extends StatelessWidget {
   const IndexCard({required this.ink, required this.child, super.key, this.padding = const EdgeInsets.fromLTRB(28, 22, 22, 22), this.elevated = true});
@@ -358,11 +382,17 @@ class _ContextLine extends StatelessWidget {
 
 /// A card in a list: both sides at a glance.
 class CardTile extends ConsumerWidget {
-  const CardTile({required this.card, super.key, this.onTap, this.showLocation = false, this.font});
+  const CardTile({required this.card, super.key, this.onTap, this.onShare, this.shareTooltip, this.showLocation = false, this.font});
 
   final Flashcard card;
   final VoidCallback? onTap;
   final bool showLocation;
+
+  /// Sends this one card on its way — published to the community from the
+  /// reader's own deck, sent out as a picture from someone else's recap.
+  /// The button is given the tile's corner; [shareTooltip] says which it is.
+  final void Function(Rect origin)? onShare;
+  final String? shareTooltip;
 
   /// A deck's own font (a published recap); the reader's setting otherwise.
   final CardFont? font;
@@ -385,7 +415,12 @@ class CardTile extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CardMeta(card: card, showLocation: showLocation),
+              Row(
+                children: [
+                  Expanded(child: CardMeta(card: card, showLocation: showLocation)),
+                  if (onShare != null) _ShareCorner(tooltip: shareTooltip, onShare: onShare!),
+                ],
+              ),
               const SizedBox(height: 8),
               front,
               if (card.back.isNotEmpty) ...[

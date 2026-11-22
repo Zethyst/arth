@@ -158,6 +158,31 @@ enum AppStrings {
   String idiomsProgress(int at, int of) => _('$at of $of', '$of में से $at');
   String get idiomsSeeAll => _('Browse all', 'सभी देखें');
   String get idiomsPractice => _('Practice', 'अभ्यास');
+  String get wordPowerTitle => _('Word power', 'शब्द-शक्ति');
+  String get wordPowerHelp => _('Synonyms, antonyms and one-word substitutions', 'समानार्थी, विलोम और एक शब्द');
+  String get wordPowerIntro => _(
+        'Taken from the dictionary on your phone, so all of it works offline. Read a set, or practise it.',
+        'ये आपके फ़ोन के शब्दकोश से बने हैं, इसलिए बिना इंटरनेट चलते हैं। पढ़ें, या अभ्यास करें।',
+      );
+  String get synonymsHelp => _('Words that mean the same', 'एक जैसे अर्थ वाले शब्द');
+  String get antonymsHelp => _('Words that mean the opposite', 'उलटे अर्थ वाले शब्द');
+  String get substitutionsTitle => _('One-word substitution', 'एक शब्द');
+  String get substitutionsHelp => _('One word for a whole description', 'पूरे वाक्यांश के लिए एक शब्द');
+  String wordSetCount(int n) => _(n == 1 ? '1 word' : '$n words', '$n शब्द');
+  String wordSetSavedCount(int n) => _('$n kept', '$n सहेजे');
+  String get wordSetBrowse => _('Read', 'पढ़ें');
+  String get wordSetBuilding => _('Reading your dictionary…', 'आपका शब्दकोश पढ़ा जा रहा है…');
+  String get wordSetsEmpty => _(
+        'These come from the dictionary. Download it from the You tab, and they appear.',
+        'ये शब्दकोश से बनते हैं। आप टैब से शब्दकोश डाउनलोड करें, फिर ये दिखेंगे।',
+      );
+  String get askSynonym => _('Which word means the same?', 'इनमें से किसका अर्थ वही है?');
+  String get askAntonym => _('Which word means the opposite?', 'इनमें से किसका अर्थ उलटा है?');
+  String get askSubstitution => _('Which one word says all this?', 'यह सब एक शब्द में क्या है?');
+  String get practiceTooFewWords => _(
+        'A few more words are needed before practice works. Download the dictionary from the You tab.',
+        'अभ्यास के लिए अभी कुछ और शब्द चाहिए। आप टैब से शब्दकोश डाउनलोड करें।',
+      );
   String get idiomsSaved => _('Saved', 'सहेजे');
 
   // ---- tools ----
@@ -702,6 +727,8 @@ enum AppStrings {
   String aiQuotaResets(String date) => _('You’ve used this month’s AI answers. More on $date; the offline dictionary still works.', 'इस महीने के AI जवाब खत्म हो गए। $date से फिर मिलेंगे; ऑफ़लाइन शब्दकोश चलता रहेगा।');
   String get seePlans => _('See plans', 'प्लान देखें');
   String get planCheckFailed => _('We couldn’t check your plan. Check your connection and try again.', 'आपका प्लान जाँच नहीं पाए। इंटरनेट देखकर फिर कोशिश करें।');
+  String get planCheckAgain => _('Already have a plan? Check again', 'प्लान ले लिया है? दोबारा देखें');
+  String get planStillFree => _('This account is still on the free plan.', 'यह खाता अभी भी मुफ़्त प्लान पर है।');
   String get plans => _('Plans', 'प्लान');
   String get plansIntro => _('The dictionary on your phone is always free. AI answers — the meaning in this sentence, sentence translations, rare words — depend on your plan.', 'फ़ोन का शब्दकोश हमेशा मुफ़्त है। AI जवाब — इस वाक्य में मतलब, वाक्य का अनुवाद, दुर्लभ शब्द — आपके प्लान पर निर्भर हैं।');
   String get planFreeAi => _('100 AI answers, to try it out', 'आज़माने के लिए 100 AI जवाब');
@@ -799,6 +826,8 @@ enum AppStrings {
   String get heldForReview => _('Held for review after reports. Only you can see it until an admin decides.', 'रिपोर्ट के बाद समीक्षा के लिए रोका गया। एडमिन के फ़ैसले तक सिर्फ़ आप इसे देख सकते हैं।');
   String get shareToCommunity => _('Share to community', 'समुदाय में साझा करें');
   String get shareTitle => _('Share your recap', 'अपना सार साझा करें');
+  String get shareQuoteTitle => _('Share this quote', 'यह उद्धरण साझा करें');
+  String get shareQuoteIntro => _('Other readers will see this one card, with your name and photo.', 'दूसरे पाठक यह एक कार्ड आपके नाम और फ़ोटो के साथ देखेंगे।');
   String get share => _('Share', 'साझा करें');
   String get exportPdf => _('Export as PDF', 'PDF बनाएँ');
   String get exportPdfHint => _(
@@ -811,6 +840,17 @@ enum AppStrings {
       );
   String get preparingPdf => _('Making the PDF…', 'PDF बन रहा है…');
   String get pdfFailed => _('Couldn’t make the PDF. Try again.', 'PDF नहीं बन पाया। फिर कोशिश करें।');
+  String get shareQuote => _('Share this quote', 'यह उद्धरण साझा करें');
+  String get shareQuoteToCommunity => _('Share this one to the community', 'यह एक समुदाय में साझा करें');
+  String sharedByLine(String who) => _('shared by $who', '$who ने साझा किया');
+  String get quoteImageFailed => _('Couldn’t make the picture. Try again.', 'तस्वीर नहीं बन पाई। फिर कोशिश करें।');
+  String get pdfReady => _('The PDF is ready', 'PDF तैयार है');
+  String get pdfSave => _('Save to this phone', 'इस फ़ोन में सहेजें');
+  String get pdfSaveHint => _('Choose where it goes — Downloads, Drive, anywhere', 'जगह चुनें — Downloads, Drive, कहीं भी');
+  String get pdfShare => _('Share', 'साझा करें');
+  String get pdfShareHint => _('WhatsApp, email, print — whatever your phone offers', 'WhatsApp, ईमेल, प्रिंट — जो फ़ोन दे');
+  String get pdfSaved => _('Saved', 'सहेज लिया');
+  String get pdfSaveFailed => _('Couldn’t save the PDF. Try sharing it instead.', 'PDF सहेज नहीं पाए। साझा करके देखें।');
   String pdfSubject(String book) => _('My cards from $book', '$book से मेरे कार्ड');
   String get shareIntro => _('Other readers will see the cards you choose, with your name and photo.', 'दूसरे पाठक आपके चुने कार्ड आपके नाम और फ़ोटो के साथ देखेंगे।');
   String get recapTitleHint => _('A title (optional), e.g. “What stayed with me”', 'शीर्षक (वैकल्पिक), जैसे “जो मन में रह गया”');

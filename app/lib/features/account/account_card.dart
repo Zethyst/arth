@@ -130,7 +130,7 @@ class AccountCard extends ConsumerWidget {
               IconButton(
                 tooltip: t.syncNow,
                 icon: Icon(Icons.sync_rounded, color: c.inkMuted),
-                onPressed: () => unawaited(ref.read(syncProvider.notifier).run()),
+                onPressed: () => unawaited(ref.read(syncProvider.notifier).run(withProfile: true)),
               ),
           ],
         ),

@@ -95,6 +95,8 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
     final t = ref.watch(stringsProvider);
     final scale = ref.watch(settingsProvider).hindiScale;
     final label = uiLabel(hindi: t.isHindi, color: c.inkMuted, scale: scale);
+    // Shared from one card's corner: the sheet is about that quote.
+    final single = widget.cards.length == 1;
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.85,
@@ -113,7 +115,7 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      Expanded(child: Text(t.shareTitle, style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale))),
+                      Expanded(child: Text(single ? t.shareQuoteTitle : t.shareTitle, style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale))),
                       IconButton(
                         tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                         icon: Icon(Icons.close_rounded, color: c.inkMuted),
@@ -124,38 +126,43 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
                   const SizedBox(height: 4),
                   Text(widget.bookTitle, style: EnglishText.italic(c.inkMuted, size: 15)),
                   const SizedBox(height: 8),
-                  Text(t.shareIntro, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 14)),
+                  Text(single ? t.shareQuoteIntro : t.shareIntro, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 14)),
                   const SizedBox(height: 16),
                   TextField(controller: _title, maxLength: 120, style: EnglishText.body(c.ink, size: 17), decoration: InputDecoration(hintText: t.recapTitleHint, counterText: '')),
                   const SizedBox(height: 10),
                   TextField(controller: _blurb, maxLength: 600, minLines: 1, maxLines: 4, style: EnglishText.body(c.ink), decoration: InputDecoration(hintText: t.blurbHint, counterText: '')),
                   const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(child: Text(t.cardsChosen(_chosen.length, widget.cards.length), style: label)),
-                      TextButton(onPressed: () => setState(() => _chosen.addAll(widget.cards.map((c) => c.id))), child: Text(t.selectAll)),
-                      TextButton(onPressed: () => setState(_chosen.clear), child: Text(t.selectNone)),
-                    ],
-                  ),
-                  for (final card in widget.cards)
-                    CheckboxListTile(
-                      value: _chosen.contains(card.id),
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      activeColor: c.accent,
-                      onChanged: (v) {
-                        Haptics.choose();
-                        setState(() => v == true ? _chosen.add(card.id) : _chosen.remove(card.id));
-                      },
-                      title: Text(card.front, style: scriptStyle(card.front, color: c.ink, scale: scale, size: 15), maxLines: 2, overflow: TextOverflow.ellipsis),
-                      subtitle: Row(
-                        children: [
-                          Icon(kindIcon(card.kind), size: 14, color: kindColor(card.kind, c)),
-                          const SizedBox(width: 6),
-                          Flexible(child: Text(card.location ?? kindLabel(card.kind, t), style: EnglishText.label(c.inkMuted, size: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        ],
-                      ),
+                  // One card is not a choice: it's the quote they tapped.
+                  if (!single)
+                    Row(
+                      children: [
+                        Expanded(child: Text(t.cardsChosen(_chosen.length, widget.cards.length), style: label)),
+                        TextButton(onPressed: () => setState(() => _chosen.addAll(widget.cards.map((c) => c.id))), child: Text(t.selectAll)),
+                        TextButton(onPressed: () => setState(_chosen.clear), child: Text(t.selectNone)),
+                      ],
                     ),
+                  if (single)
+                    CardTile(card: widget.cards.single)
+                  else
+                    for (final card in widget.cards)
+                      CheckboxListTile(
+                        value: _chosen.contains(card.id),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        activeColor: c.accent,
+                        onChanged: (v) {
+                          Haptics.choose();
+                          setState(() => v == true ? _chosen.add(card.id) : _chosen.remove(card.id));
+                        },
+                        title: Text(card.front, style: scriptStyle(card.front, color: c.ink, scale: scale, size: 15), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        subtitle: Row(
+                          children: [
+                            Icon(kindIcon(card.kind), size: 14, color: kindColor(card.kind, c)),
+                            const SizedBox(width: 6),
+                            Flexible(child: Text(card.location ?? kindLabel(card.kind, t), style: EnglishText.label(c.inkMuted, size: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ),
                   if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: uiBody(hindi: t.isHindi, color: c.accent, scale: scale, size: 14))),
                 ],
               ),

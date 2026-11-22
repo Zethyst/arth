@@ -150,6 +150,11 @@ class SeedNotifier extends Notifier<SeedProgress> {
     if (r.phase == SeedPhase.done) {
       final version = ref.read(dictionaryVersionProvider.notifier);
       ref.invalidate(localEntryCountProvider);
+      // New words mean new synonyms, antonyms and substitutions. They are
+      // derived from the entries rather than downloaded, so the moment the
+      // entries change is the moment to derive them again — under a second
+      // over the whole dictionary, and it happens once per download.
+      await ref.read(localStoreProvider).rebuildWordSets();
       version.state++;
     }
     if (r.phase == SeedPhase.failed && r.failure == SeedFailure.offline) {

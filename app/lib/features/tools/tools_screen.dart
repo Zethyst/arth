@@ -46,6 +46,13 @@ class ToolsScreen extends ConsumerWidget {
             onTap: () => context.push('/tools/translate'),
           ),
           _ToolCard(
+            icon: Icons.auto_stories_rounded,
+            title: t.wordPowerTitle,
+            help: t.wordPowerHelp,
+            tint: c.marigold,
+            onTap: () => context.push('/words'),
+          ),
+          _ToolCard(
             icon: Icons.spellcheck_rounded,
             title: t.spellCheckTitle,
             help: t.spellCheckHelp,

@@ -140,13 +140,61 @@ class CommunityLock extends ConsumerWidget {
                         onPressed: () => unawaited(context.push('/plans')),
                         child: Text(t.seePlans, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: scale)),
                       ),
-                    ),
+                    )
+                  else
+                    const Center(child: _CheckPlanAgain()),
                 ],
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Plans are granted on the server, so a reader can be given one while the
+/// app is open and the phone would keep showing the lock until the profile is
+/// read again. Syncing does that, and so does this.
+class _CheckPlanAgain extends ConsumerStatefulWidget {
+  const _CheckPlanAgain();
+
+  @override
+  ConsumerState<_CheckPlanAgain> createState() => _CheckPlanAgainState();
+}
+
+class _CheckPlanAgainState extends ConsumerState<_CheckPlanAgain> {
+  bool _checking = false;
+
+  Future<void> _check() async {
+    setState(() => _checking = true);
+    await ref.read(accountProvider.notifier).refresh();
+    if (!mounted) return;
+    setState(() => _checking = false);
+    // Open now: the screen around this card is about to be replaced by the
+    // community itself, so there's nothing to say.
+    if (ref.read(communityAccessProvider) == CommunityAccess.open) return;
+    final t = ref.read(stringsProvider);
+    final account = ref.read(accountProvider);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(account.hasValue ? t.planStillFree : t.planCheckFailed)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final t = ref.watch(stringsProvider);
+    final scale = ref.watch(settingsProvider).hindiScale;
+    if (_checking) {
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    return TextButton(
+      onPressed: () => unawaited(_check()),
+      child: Text(t.planCheckAgain, style: uiLabel(hindi: t.isHindi, color: c.accent, scale: scale)),
     );
   }
 }

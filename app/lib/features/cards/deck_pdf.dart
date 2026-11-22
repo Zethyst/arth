@@ -6,18 +6,18 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/settings.dart';
 import 'package:arth/app/strings.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/pdf/image_pdf.dart';
+import 'package:arth/core/render/widget_image.dart';
 import 'package:arth/data/local_store.dart';
 import 'package:arth/features/cards/card_face.dart';
 import 'package:arth/features/library/book_cover.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
@@ -85,27 +85,87 @@ Future<void> _exportPdf(
       ),
     ),
   );
+  final name = bookTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), ' ').trim();
+  final fileName = '${name.isEmpty ? 'Arth' : name} - $suffix.pdf';
+  Uint8List? bytes;
   File? file;
   try {
     final settings = ref.read(settingsProvider);
-    final bytes = await build(t, settings);
+    bytes = await build(t, settings);
     final dir = await getTemporaryDirectory();
-    final name = bookTitle.replaceAll(RegExp(r'[\\/:*?"<>|]+'), ' ').trim();
-    file = File('${dir.path}/${name.isEmpty ? 'Arth' : name} - $suffix.pdf');
+    file = File('${dir.path}/$fileName');
     await file.writeAsBytes(bytes, flush: true);
-  } on Exception catch (e) {
-    debugPrint('pdf export failed: $e');
+    // Anything at all, not only Exceptions: drawing and compressing a long
+    // document can fail in ways that aren't — running the phone out of
+    // memory, for one — and a failure nobody is told about, under a dialog
+    // that can't be dismissed, reads as an app that has stopped working.
+    // ignore: avoid_catches_without_on_clauses
+  } catch (e, stack) {
+    debugPrint('pdf export failed: $e\n$stack');
+    bytes = null;
+    file = null;
   } finally {
     navigator.pop();
   }
-  if (file == null) {
+  if (bytes == null || file == null) {
     messenger?.showSnackBar(SnackBar(content: Text(t.pdfFailed)));
     return;
   }
-  await SharePlus.instance.share(
-    ShareParams(files: [XFile(file.path, mimeType: 'application/pdf')], subject: subject, sharePositionOrigin: origin),
-  );
+  if (!context.mounted) return;
+  // Sharing is one way out of the app; a file the reader keeps is another,
+  // and the one they ask for when they go looking in Downloads.
+  final choice = await _askSaveOrShare(context, ref, t);
+  if (choice == null) return;
+  if (choice == _PdfDestination.share) {
+    await SharePlus.instance.share(
+      ShareParams(files: [XFile(file.path, mimeType: 'application/pdf')], subject: subject, sharePositionOrigin: origin),
+    );
+    return;
+  }
+  try {
+    final to = await FilePicker.saveFile(fileName: fileName, bytes: bytes, mimeType: 'application/pdf');
+    if (to != null) messenger?.showSnackBar(SnackBar(content: Text(t.pdfSaved)));
+  } on Exception catch (e) {
+    debugPrint('pdf save failed: $e');
+    messenger?.showSnackBar(SnackBar(content: Text(t.pdfSaveFailed)));
+  }
 }
+
+enum _PdfDestination { save, share }
+
+/// Where the finished PDF should go. Null if the reader dismissed the sheet.
+Future<_PdfDestination?> _askSaveOrShare(BuildContext context, WidgetRef ref, AppStrings t) => showModalBottomSheet<_PdfDestination>(
+      context: context,
+      useSafeArea: true,
+      builder: (ctx) {
+        final c = ctx.colors;
+        final scale = ref.read(settingsProvider).hindiScale;
+        Widget option(_PdfDestination value, IconData icon, String label, String hint) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              leading: Icon(icon, color: c.accent),
+              title: Text(label, style: uiLabel(hindi: t.isHindi, color: c.ink, scale: scale).copyWith(fontSize: 16)),
+              subtitle: Text(hint, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale, size: 13.5)),
+              onTap: () => Navigator.pop(ctx, value),
+            );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                  child: Text(t.pdfReady, style: uiHeading(hindi: t.isHindi, color: c.ink, scale: scale)),
+                ),
+                option(_PdfDestination.save, Icons.download_rounded, t.pdfSave, t.pdfSaveHint),
+                option(_PdfDestination.share, Icons.ios_share_rounded, t.pdfShare, t.pdfShareHint),
+              ],
+            ),
+          ),
+        );
+      },
+    );
 
 /// The PDF itself: a title block, then every card in reading order.
 Future<Uint8List> buildDeckPdf({
@@ -139,10 +199,16 @@ Future<Uint8List> buildWordsPdf({
 
 Future<Uint8List> _layoutPdf({required String bookTitle, required Widget header, required List<Widget> tiles}) async {
   // Styles ask Google Fonts for their files on first use: draw once to ask,
-  // wait for them, then draw for real.
+  // wait for them, then draw for real. A face that is still on its way over
+  // a slow connection is worth a few seconds and no more — the document is
+  // worth more than the font, and the faces on the phone stand in for it.
   await _capture(header);
   if (tiles.isNotEmpty) await _capture(tiles.first);
-  await GoogleFonts.pendingFonts();
+  try {
+    await GoogleFonts.pendingFonts().timeout(const Duration(seconds: 8));
+  } on Exception catch (e) {
+    debugPrint('pdf fonts: $e');
+  }
 
   final pages = <PdfPageSpec>[];
   var y = double.infinity;
@@ -178,38 +244,8 @@ Future<Uint8List> _layoutPdf({required String bookTitle, required Widget header,
 /// Draws [widget] off screen, [_contentWidth] points wide and as tall as it
 /// needs, and returns its pixels flattened onto white.
 Future<PdfImage> _capture(Widget widget) async {
-  final boundary = RenderRepaintBoundary();
-  final view = ui.PlatformDispatcher.instance.implicitView!;
-  final renderView = RenderView(
-    view: view,
-    child: RenderPositionedBox(alignment: Alignment.topLeft, child: boundary),
-    configuration: ViewConfiguration(
-      logicalConstraints: BoxConstraints.tight(const Size(_contentWidth, 4000)),
-      devicePixelRatio: _pixelRatio,
-    ),
-  );
-  final pipeline = PipelineOwner()..rootNode = renderView;
-  renderView.prepareInitialFrame();
-  final build = BuildOwner(focusManager: FocusManager());
-  final root = RenderObjectToWidgetAdapter<RenderBox>(container: boundary, child: widget).attachToRenderTree(build);
-  build
-    ..buildScope(root)
-    ..finalizeTree();
-  pipeline
-    ..flushLayout()
-    ..flushCompositingBits()
-    ..flushPaint();
-  final image = await boundary.toImage(pixelRatio: _pixelRatio);
-  final rgba = (await image.toByteData())!.buffer.asUint8List();
-  final rgb = Uint8List(image.width * image.height * 3);
-  for (var i = 0, j = 0; i < rgba.length; i += 4, j += 3) {
-    // Premultiplied RGBA over white.
-    final a = 255 - rgba[i + 3];
-    rgb[j] = rgba[i] + a;
-    rgb[j + 1] = rgba[i + 1] + a;
-    rgb[j + 2] = rgba[i + 2] + a;
-  }
-  final out = PdfImage(width: image.width, height: image.height, rgb: rgb);
+  final image = await renderOffScreen(widget, width: _contentWidth, pixelRatio: _pixelRatio);
+  final out = PdfImage(width: image.width, height: image.height, rgb: await rgbBytes(image));
   image.dispose();
   return out;
 }

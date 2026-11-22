@@ -12,6 +12,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/data/local_store.dart';
 import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:arth/features/idioms/idiom_selection.dart';
+import 'package:arth/features/practice/practice_option.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -145,17 +146,17 @@ class _IdiomPracticeScreenState extends ConsumerState<IdiomPracticeScreen> {
                   for (var i = 0; i < q.options.length; i++)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: _Option(
+                      child: PracticeOption(
                         label: String.fromCharCode(65 + i),
                         text: q.options[i],
                         style: h.body(c.ink),
                         state: _picked == null
-                            ? _OptionState.open
+                            ? PracticeOptionState.open
                             : i == q.answer
-                                ? _OptionState.right
+                                ? PracticeOptionState.right
                                 : i == _picked
-                                    ? _OptionState.wrong
-                                    : _OptionState.dimmed,
+                                    ? PracticeOptionState.wrong
+                                    : PracticeOptionState.dimmed,
                         onTap: () => unawaited(_answer(q, i)),
                       ),
                     ),
@@ -171,51 +172,6 @@ class _IdiomPracticeScreenState extends ConsumerState<IdiomPracticeScreen> {
                 width: double.infinity,
                 child: FilledButton(onPressed: _next, child: Text(t.idiomNext)),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum _OptionState { open, right, wrong, dimmed }
-
-class _Option extends StatelessWidget {
-  const _Option({required this.label, required this.text, required this.style, required this.state, required this.onTap});
-
-  final String label;
-  final String text;
-  final TextStyle style;
-  final _OptionState state;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    // Green for the answer, lac red for the miss. It used to be the other way
-    // round — the correct answer wore the app's red and the wrong one a
-    // neutral grey, so a right answer looked like a mistake.
-    final (border, fill, mark) = switch (state) {
-      _OptionState.open => (c.ink, Colors.transparent, c.accent),
-      _OptionState.right => (c.good, c.good.withValues(alpha: 0.14), c.good),
-      _OptionState.wrong => (c.accent, c.accent.withValues(alpha: 0.12), c.accent),
-      _OptionState.dimmed => (c.rule, Colors.transparent, c.rule),
-    };
-    return InkWell(
-      onTap: state == _OptionState.open ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: fill, border: Border.all(color: border, width: 2)),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: EnglishText.label(mark)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(text, style: state == _OptionState.dimmed ? style.copyWith(color: c.inkMuted) : style),
-            ),
-            if (state == _OptionState.right) Icon(Icons.check_rounded, color: c.good),
-            if (state == _OptionState.wrong) Icon(Icons.close_rounded, color: c.accent),
           ],
         ),
       ),
