@@ -62,17 +62,17 @@ const EnvSchema = z.object({
 
   // --- the admin dashboard's income (all optional; unset means "not connected") ---
   /** The currency ad and purchase earnings are asked for, so they can be added up. */
-  INCOME_CURRENCY: z.string().length(3).default('INR'),
+  INCOME_CURRENCY: z.string().trim().length(3).default('INR'),
   /** RevenueCat project id, for its Charts & Metrics API (MRR, revenue). */
-  REVENUECAT_PROJECT_ID: z.string().default(''),
+  REVENUECAT_PROJECT_ID: z.string().trim().default(''),
   /** A RevenueCat **v2** key with `charts_metrics:overview:read`; the v1 secret key above won't do. */
-  REVENUECAT_METRICS_KEY: z.string().default(''),
+  REVENUECAT_METRICS_KEY: z.string().trim().default(''),
   /** AdMob publisher id ("pub-…"), whose earnings the dashboard reads. */
-  ADMOB_PUBLISHER_ID: z.string().default(''),
+  ADMOB_PUBLISHER_ID: z.string().trim().default(''),
   /** OAuth client and refresh token for that AdMob account (README, "The admin dashboard"). */
-  ADMOB_CLIENT_ID: z.string().default(''),
-  ADMOB_CLIENT_SECRET: z.string().default(''),
-  ADMOB_REFRESH_TOKEN: z.string().default(''),
+  ADMOB_CLIENT_ID: z.string().trim().default(''),
+  ADMOB_CLIENT_SECRET: z.string().trim().default(''),
+  ADMOB_REFRESH_TOKEN: z.string().trim().default(''),
 
   // --- AI allowances (enforced only when accounts are on) ---
   AI_FREE_LIMIT: z.coerce.number().int().positive().default(100),
