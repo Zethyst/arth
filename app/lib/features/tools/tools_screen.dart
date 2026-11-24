@@ -66,6 +66,13 @@ class ToolsScreen extends ConsumerWidget {
             tint: c.ink,
             onTap: () => context.push('/tools/say'),
           ),
+          _ToolCard(
+            icon: Icons.format_list_numbered_rounded,
+            title: t.numbersTitle,
+            help: t.numbersHelp,
+            tint: c.ink,
+            onTap: () => context.push('/tools/numbers'),
+          ),
         ],
       ),
     );

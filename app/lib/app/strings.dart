@@ -228,6 +228,35 @@ enum AppStrings {
   String get toneDirect => _('Direct', 'सीधा');
   String get toneConcise => _('Short', 'संक्षिप्त');
 
+  // ---- numbers ----
+  String get numbersTitle => _('Numbers', 'गिनती');
+  String get numbersHelp => _('One to a hundred, in Hindi and English.', 'एक से सौ तक, हिंदी और अंग्रेज़ी में।');
+  String get numbersIntro => _(
+        'Tap a number to hear it in Hindi; EN says it in English.',
+        'हिंदी में सुनने के लिए संख्या पर टैप करें; EN से अंग्रेज़ी में सुनें।',
+      );
+  String get numbersSearchHint => _('A number, or part of a name', 'कोई संख्या, या नाम का हिस्सा');
+  String get clearSearch => _('Clear', 'हटाएँ');
+  String numbersRange(int from, int to) => '$from–$to';
+  String numbersFound(int n) => _(n == 1 ? '1 number' : '$n numbers', '$n संख्याएँ');
+  String get numbersNoMatch => _('No number by that name.', 'इस नाम की कोई संख्या नहीं।');
+
+  /// What ties one ten together. The names can't be assembled from smaller
+  /// ones, but each ten does share an ending, and every ninth is the next ten
+  /// with un- in front of it — which is the only shortcut Hindi offers.
+  String numbersDecadeNote(int decade) => switch (decade) {
+        0 => _('The ten the other ninety are built from.', 'ये दस, जिनसे बाकी नब्बे बनते हैं।'),
+        1 => _('Eleven to eighteen end in -rah. Unnees is one short of bees.', 'ग्यारह से अठारह तक सब -रह पर। उन्नीस यानी बीस से एक कम।'),
+        2 => _('-ees runs through the twenties. Untees is one short of tees.', 'बीस वालों में -ईस चलता है। उनतीस यानी तीस से एक कम।'),
+        3 => _('-tees runs through the thirties. Untaalees is one short of chaalees.', 'तीस वालों में -तीस चलता है। उनतालीस यानी चालीस से एक कम।'),
+        4 => _('-taalees runs through the forties. Unchaas is one short of pachaas.', 'चालीस वालों में -तालीस चलता है। उनचास यानी पचास से एक कम।'),
+        5 => _('-van runs through the fifties. Unsath is one short of saath.', 'पचास वालों में -वन चलता है। उनसठ यानी साठ से एक कम।'),
+        6 => _('-sath runs through the sixties. Unhattar is one short of sattar.', 'साठ वालों में -सठ चलता है। उनहत्तर यानी सत्तर से एक कम।'),
+        7 => _('-hattar runs through the seventies. Unyaasee is one short of assee.', 'सत्तर वालों में -हत्तर चलता है। उन्यासी यानी अस्सी से एक कम।'),
+        8 => _('-aasee runs through the eighties, all the way to navaasee.', 'अस्सी वालों में -आसी चलता है, नवासी तक।'),
+        _ => _('-aanave runs through the nineties, and sau closes the hundred.', 'नब्बे वालों में -आनवे चलता है, और सौ पर सैकड़ा पूरा।'),
+      };
+
   // ---- speaking coach ----
   String get coachTitle => _('Speaking practice', 'बोलने का अभ्यास');
   String get coachHelp =>

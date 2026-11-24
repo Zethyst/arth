@@ -30,6 +30,7 @@ import 'package:arth/features/seed/seed_screen.dart';
 import 'package:arth/features/settings/settings_screen.dart';
 import 'package:arth/features/tools/coach_screen.dart';
 import 'package:arth/features/tools/coach_session.dart';
+import 'package:arth/features/tools/numbers_screen.dart';
 import 'package:arth/features/tools/say_it_right_screen.dart';
 import 'package:arth/features/tools/spell_check_screen.dart';
 import 'package:arth/features/tools/tools_screen.dart';
@@ -80,6 +81,7 @@ GoRouter buildRouter({required bool needsSeed}) => GoRouter(
         GoRoute(path: '/tools/translate', builder: (_, _) => const TranslatorScreen()),
         GoRoute(path: '/tools/spell', builder: (_, _) => const SpellCheckScreen()),
         GoRoute(path: '/tools/say', builder: (_, _) => const SayItRightScreen()),
+        GoRoute(path: '/tools/numbers', builder: (_, _) => const NumbersScreen()),
         GoRoute(path: '/tools/coach', builder: (_, _) => const CoachPickScreen()),
         GoRoute(
           path: '/tools/coach/:scene',
