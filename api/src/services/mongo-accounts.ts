@@ -1,7 +1,11 @@
 import { BookmarkModel, DeletedUserModel, FlashcardModel, PhoneModel, UserModel } from '../db/models/account.js';
-import type { AccountStore, BookmarkRow, CardRow, SyncKind, User } from './accounts.js';
+import type { AccountStore, BookmarkRow, CardRow, ReaderStats, SyncKind, Tier, User } from './accounts.js';
+import { dayStart, monthKey, windowDays } from '../lib/days.js';
 
 const models = { cards: FlashcardModel, bookmarks: BookmarkModel } as const;
+
+/** The plans someone pays for; Free is everyone else. */
+const PAID = ['pro', 'super'];
 
 function toUser(doc: Record<string, unknown>): User {
   return {
@@ -53,6 +57,70 @@ export const mongoAccountStore: AccountStore = {
   async usersWithDevices(tier) {
     const docs = await UserModel.find({ 'pushDevices.0': { $exists: true }, ...(tier ? { tier } : {}) }, { _id: 1 }).lean();
     return docs.map((d) => d._id as string);
+  },
+  async readerStats({ now, days }) {
+    const month = monthKey(now);
+    const window = windowDays(now, days);
+    const since = dayStart(now, days - 1);
+    const day = { $dateToString: { date: { $toDate: '$createdAt' }, format: '%Y-%m-%d', timezone: 'UTC' } };
+    // Every reader, in one pass with four shapes of answer. This is the admin
+    // dashboard: no index covers it, and nothing on a hot path runs it.
+    const [facets] = await UserModel.aggregate<{
+      totals: { total: number; new7: number; new30: number; paying: number; granted: number; banned: number; admins: number; aiMonth: number; aiTotal: number }[];
+      tiers: { _id: Tier | null; count: number }[];
+      devices: { _id: string | null; count: number }[];
+      signups: { _id: string; count: number }[];
+    }>([
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                new7: { $sum: { $cond: [{ $gte: ['$createdAt', now - 7 * 86_400_000] }, 1, 0] } },
+                new30: { $sum: { $cond: [{ $gte: ['$createdAt', now - 30 * 86_400_000] }, 1, 0] } },
+                // A reader from before purchases has no storeTier/grantTier:
+                // their plan was granted, which `$ifNull` keeps true here.
+                paying: { $sum: { $cond: [{ $in: [{ $ifNull: ['$storeTier', 'free'] }, PAID] }, 1, 0] } },
+                granted: { $sum: { $cond: [{ $in: [{ $ifNull: ['$grantTier', { $ifNull: ['$tier', 'free'] }] }, PAID] }, 1, 0] } },
+                banned: { $sum: { $cond: ['$banned', 1, 0] } },
+                admins: { $sum: { $cond: [{ $eq: ['$role', 'admin'] }, 1, 0] } },
+                aiMonth: { $sum: { $cond: [{ $eq: ['$aiMonth', month] }, '$aiMonthUses', 0] } },
+                aiTotal: { $sum: '$aiTotal' },
+              },
+            },
+          ],
+          tiers: [{ $group: { _id: '$tier', count: { $sum: 1 } } }],
+          devices: [{ $unwind: '$pushDevices' }, { $group: { _id: '$pushDevices.platform', count: { $sum: 1 } } }],
+          signups: [{ $match: { createdAt: { $gte: since } } }, { $group: { _id: day, count: { $sum: 1 } } }],
+        },
+      },
+    ]);
+    const totals = facets?.totals?.[0];
+    const tiers = { free: 0, pro: 0, super: 0 } as Record<Tier, number>;
+    for (const row of facets?.tiers ?? []) if (row._id && row._id in tiers) tiers[row._id] = row.count;
+    const devices = { total: 0, android: 0, ios: 0 };
+    for (const row of facets?.devices ?? []) {
+      devices.total += row.count;
+      if (row._id === 'android') devices.android += row.count;
+      if (row._id === 'ios') devices.ios += row.count;
+    }
+    const counted = new Map((facets?.signups ?? []).map((r) => [r._id, r.count] as const));
+    const stats: ReaderStats = {
+      total: totals?.total ?? 0,
+      new7: totals?.new7 ?? 0,
+      new30: totals?.new30 ?? 0,
+      paying: totals?.paying ?? 0,
+      granted: totals?.granted ?? 0,
+      banned: totals?.banned ?? 0,
+      admins: totals?.admins ?? 0,
+      tiers,
+      devices,
+      ai: { month: totals?.aiMonth ?? 0, total: totals?.aiTotal ?? 0 },
+      signups: window.map((d) => ({ day: d, count: counted.get(d) ?? 0 })),
+    };
+    return stats;
   },
   async insertUser(user) {
     const { uid, ...rest } = user;

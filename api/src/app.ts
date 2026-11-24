@@ -23,6 +23,7 @@ import { billingRoutes } from './routes/billing.js';
 import { couponRoutes } from './routes/coupons.js';
 import { accountDeleteRoutes, type LoginRemover } from './routes/account-delete.js';
 import { disabledBilling, type Billing } from './billing/revenuecat.js';
+import { noIncome, type Income } from './billing/income.js';
 import { translateRoutes } from './routes/translate.js';
 import { explainRoutes } from './routes/explain.js';
 import { toolRoutes } from './routes/tools.js';
@@ -73,6 +74,8 @@ export type AppOptions = {
   removeLogin?: LoginRemover;
   /** Store purchases (RevenueCat); off when omitted. */
   billing?: { billing: Billing; webhookAuth: string };
+  /** Ad and purchase earnings for the admin dashboard; none when omitted. */
+  income?: Income;
   /** Discount codes; an in-memory store when omitted, so tests need no Mongo. */
   coupons?: CouponStore;
   /** Entries in the on-device dictionary (SEED_LIMIT); 20000 when omitted. */
@@ -236,7 +239,7 @@ export function buildApp(opts: AppOptions): FastifyInstance {
         await accountScope.register(accountRoutes, { ...accounts, limits: limitsAi });
         const community = opts.community ?? memoryCommunityStore();
         await accountScope.register(communityRoutes, { ...accounts, community });
-        await accountScope.register(adminRoutes, { ...accounts, community, limits: limitsAi });
+        await accountScope.register(adminRoutes, { ...accounts, community, limits: limitsAi, income: opts.income ?? noIncome });
         await accountScope.register(accountDeleteRoutes, { ...accounts, community, removeLogin: opts.removeLogin });
         await accountScope.register(billingRoutes, { ...accounts, ...(opts.billing ?? { billing: disabledBilling, webhookAuth: '' }) });
         await accountScope.register(couponRoutes, { ...accounts, coupons: opts.coupons ?? memoryCouponStore() });

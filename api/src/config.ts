@@ -60,6 +60,20 @@ const EnvSchema = z.object({
   /** The Authorization header value RevenueCat sends with its webhooks. */
   REVENUECAT_WEBHOOK_AUTH: z.string().default(''),
 
+  // --- the admin dashboard's income (all optional; unset means "not connected") ---
+  /** The currency ad and purchase earnings are asked for, so they can be added up. */
+  INCOME_CURRENCY: z.string().length(3).default('INR'),
+  /** RevenueCat project id, for its Charts & Metrics API (MRR, revenue). */
+  REVENUECAT_PROJECT_ID: z.string().default(''),
+  /** A RevenueCat **v2** key with `charts_metrics:overview:read`; the v1 secret key above won't do. */
+  REVENUECAT_METRICS_KEY: z.string().default(''),
+  /** AdMob publisher id ("pub-…"), whose earnings the dashboard reads. */
+  ADMOB_PUBLISHER_ID: z.string().default(''),
+  /** OAuth client and refresh token for that AdMob account (README, "The admin dashboard"). */
+  ADMOB_CLIENT_ID: z.string().default(''),
+  ADMOB_CLIENT_SECRET: z.string().default(''),
+  ADMOB_REFRESH_TOKEN: z.string().default(''),
+
   // --- AI allowances (enforced only when accounts are on) ---
   AI_FREE_LIMIT: z.coerce.number().int().positive().default(100),
   /** Free accounts that may share one phone's allowance (a new email doesn't reset it). */

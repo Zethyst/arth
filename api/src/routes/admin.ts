@@ -4,6 +4,7 @@ import { ApiError } from '../lib/errors.js';
 import { authenticate } from './account.js';
 import type { CommunityDeps } from './community.js';
 import { higherTier, type Tier, type User } from '../services/accounts.js';
+import type { Income } from '../billing/income.js';
 import { moderate, type ReportKind } from '../services/community.js';
 import { usageOf, type Limits } from '../services/quota.js';
 import { notifyUser, tierMessage } from '../push/notify.js';
@@ -23,8 +24,25 @@ const userView = (u: User, limits: Limits) => ({
   createdAt: u.createdAt,
 });
 
-export const adminRoutes: FastifyPluginAsync<CommunityDeps & { limits: Limits }> = async (app, deps) => {
-  const { community, limits } = deps;
+export type AdminDeps = CommunityDeps & { limits: Limits; income: Income };
+
+/**
+ * One income source for the dashboard: its numbers, or why there are none.
+ * A network being down, or a key missing a permission, must not cost the admin
+ * the rest of the screen — so each source is reported on its own.
+ */
+const source = async <T>(enabled: boolean, read: () => Promise<T>, onError: (err: unknown) => void) => {
+  if (!enabled) return { state: 'off' as const };
+  try {
+    return { state: 'ok' as const, ...(await read()) };
+  } catch (err) {
+    onError(err);
+    return { state: 'error' as const, reason: err instanceof Error ? err.message : 'failed' };
+  }
+};
+
+export const adminRoutes: FastifyPluginAsync<AdminDeps> = async (app, deps) => {
+  const { community, limits, income } = deps;
   const pusher = deps.pusher ?? disabledPusher;
 
   app.addHook('onRequest', async (req) => {
@@ -114,6 +132,26 @@ export const adminRoutes: FastifyPluginAsync<CommunityDeps & { limits: Limits }>
       const after = (await deps.store.updateUser(req.params.uid, set))!;
       if (after.tier !== before.tier) void notifyUser(deps.store, pusher, after.uid, tierMessage(after.tier)).catch(() => {});
       return ok(userView(after, limits));
+    },
+  );
+
+  /**
+   * The dashboard: what Arth earned over a window, and who it earned it from.
+   * Ads and purchases come from AdMob and RevenueCat live (see
+   * billing/income.ts); the reader and community counts are ours.
+   */
+  app.get<{ Querystring: { days?: number } }>(
+    '/admin/metrics',
+    { schema: { querystring: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 90 } } } } },
+    async (req) => {
+      const days = req.query.days ?? 30;
+      const [ads, purchases, readers, counts] = await Promise.all([
+        source(income.ads.enabled, () => income.ads.report(days, income.currency), (err) => req.log.warn({ err }, 'AdMob report failed')),
+        source(income.purchases.enabled, () => income.purchases.income(days, income.currency), (err) => req.log.warn({ err }, 'RevenueCat metrics failed')),
+        deps.store.readerStats({ now: Date.now(), days }),
+        community.counts(),
+      ]);
+      return ok({ days, currency: income.currency, ads, purchases, readers, community: counts });
     },
   );
 

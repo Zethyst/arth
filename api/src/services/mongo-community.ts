@@ -116,6 +116,14 @@ export const mongoCommunityStore: CommunityStore = {
     const docs = await ReportModel.find({ resolvedAt: null }).sort({ createdAt: 1 }).limit(limit).lean();
     return docs.map((d) => toReport(d as Record<string, unknown>));
   },
+  async counts() {
+    const [decks, comments, openReports] = await Promise.all([
+      DeckModel.countDocuments({ status: 'live' }),
+      CommentModel.countDocuments({ status: 'live' }),
+      ReportModel.countDocuments({ resolvedAt: null }),
+    ]);
+    return { decks, comments, openReports };
+  },
   async findReport(id) {
     const doc = await ReportModel.findById(id).lean();
     return doc ? toReport(doc as Record<string, unknown>) : null;

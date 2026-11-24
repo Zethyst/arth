@@ -660,6 +660,81 @@ runs first where the law requires it; content is capped at PG. Without configura
   `ios/Flutter/Firebase.xcconfig` (overrides the test id in `AdMob.xcconfig`).
 - Play Console: declare that the app contains ads; App Store: the privacy label.
 
+## The admin dashboard
+
+The admin screen (You → Admin, for accounts with the admin role) opens on a **Dashboard** tab:
+income over the last 7 / 30 / 90 days, and the readers behind it. `GET /v1/admin/metrics`
+(`api/src/routes/admin.ts`) puts it together.
+
+Income has two halves and each is read **live** from the network that holds the money
+(`api/src/billing/income.ts`), so nothing about earnings is stored and the numbers match the
+AdMob and RevenueCat consoles rather than drifting from them:
+
+- **Ads** — AdMob's `networkReport:generate`: earnings (micros), impressions, clicks, and a
+  row per day for the chart.
+- **Plans** — RevenueCat's Charts & Metrics API: `metrics/revenue` for the window, plus
+  `metrics/overview` for MRR, active subscriptions and trials. The overview's metric ids are
+  passed through as they arrive, so a metric RevenueCat adds later shows up without a change
+  here.
+
+The rest — readers by plan, new readers per day, phones, AI uses, recaps, comments, open
+reports — is ours, from one `$facet` aggregate over users plus three counts.
+
+Either half is optional. Unconfigured, that panel says **Not connected**; if a key lacks a
+permission or the network refuses, it says **Failed** with the status. Neither is ever shown
+as a zero, and the two are added into one *Income* figure only when both answered in the same
+currency (`INCOME_CURRENCY`, default INR).
+
+### AdMob has no service accounts
+
+The earnings belong to the Google account that owns the ad units, so reading them needs that
+account's OAuth refresh token. One-time setup:
+
+1. In a Google Cloud project owned by that same account: **APIs & Services → Library →** enable
+   **AdMob API**.
+2. **OAuth consent screen**: External, that account as a test user, scope
+   `https://www.googleapis.com/auth/admob.readonly`.
+3. **Publish the consent screen** ("In production"). While it sits in *Testing*, Google expires
+   refresh tokens after **7 days** and the panel starts saying `Failed: Google OAuth 400` a week
+   after setup.
+4. **Credentials → Create credentials → OAuth client ID → Desktop app**.
+5. Get the refresh token:
+
+```sh
+cd api && ADMOB_CLIENT_ID=<id> ADMOB_CLIENT_SECRET=<secret> npm run admob-token
+```
+
+It prints a sign-in URL, waits on `http://localhost:8787/`, and prints the token. Sign in as the
+Google account that owns AdMob, or the report comes back empty.
+
+The publisher id is AdMob → **Settings → Account information → Publisher ID** (`pub-…`).
+
+### The server's env
+
+```sh
+INCOME_CURRENCY=INR
+ADMOB_PUBLISHER_ID=pub-…
+ADMOB_CLIENT_ID=…
+ADMOB_CLIENT_SECRET=…
+ADMOB_REFRESH_TOKEN=…
+REVENUECAT_PROJECT_ID=…
+REVENUECAT_METRICS_KEY=…   # Project settings → API keys → New V2 key
+```
+
+The RevenueCat v2 key needs `charts_metrics:overview:read` and the revenue read. It is a
+**different key** from `REVENUECAT_SECRET_KEY`, which applies purchases: v1 keys do not work on
+the v2 API. With only the overview permission the dashboard shows the snapshot and says the
+window's revenue wasn't available. All of these are in `render.yaml` with `sync: false`.
+
+### When the numbers look odd
+
+- **AdMob earnings are estimates** until the month closes; the last day or two move. The console
+  shows the same estimates.
+- **Timezones.** The dashboard's days are UTC; AdMob reports in the account's reporting timezone,
+  so bars near midnight can sit one off from the console.
+- **Currency.** Both sources are asked for `INCOME_CURRENCY`, converted at the day's rate. If one
+  answers in another currency anyway, each panel shows its own and they are not added up.
+
 ## Discount codes
 
 A coupon never sets a price. Google Play and the App Store own prices, and a server that

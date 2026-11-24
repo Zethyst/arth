@@ -1,7 +1,8 @@
-// Admin tools, for accounts with the admin role: what readers reported
-// (remove it, or keep it and clear the reports), readers (plan, ban), and a
-// notification to everyone. The API checks the role on every call; hiding
-// the screen from others is only a courtesy.
+// Admin tools, for accounts with the admin role: the dashboard (income from
+// ads and plans, and the readers behind it), what readers reported (remove it,
+// or keep it and clear the reports), readers (plan, ban), and a notification to
+// everyone. The API checks the role on every call; hiding the screen from
+// others is only a courtesy.
 
 import 'dart:async';
 
@@ -12,6 +13,7 @@ import 'package:arth/data/account.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/community.dart';
 import 'package:arth/features/account/account_card.dart';
+import 'package:arth/features/admin/dashboard_tab.dart';
 import 'package:arth/features/plans/plans_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,20 +28,25 @@ class AdminScreen extends ConsumerWidget {
     final t = ref.watch(stringsProvider);
     final scale = ref.watch(settingsProvider).hindiScale;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(t.adminTitle),
           bottom: TabBar(
-            labelStyle: uiLabel(hindi: t.isHindi, color: c.ink, scale: scale).copyWith(fontSize: 15),
+            // Four labels don't fit a narrow phone: let them scroll, centred
+            // while they do fit.
+            isScrollable: true,
+            tabAlignment: TabAlignment.center,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+            labelStyle: uiLabel(hindi: t.isHindi, color: c.ink, scale: scale).copyWith(fontSize: 13.5),
             labelColor: c.ink,
             unselectedLabelColor: c.inkMuted,
             indicatorColor: c.accent,
             dividerColor: c.rule,
-            tabs: [Tab(text: t.adminReports), Tab(text: t.adminReaders), Tab(text: t.adminBroadcast)],
+            tabs: [Tab(text: t.adminDashboard), Tab(text: t.adminReports), Tab(text: t.adminReaders), Tab(text: t.adminBroadcast)],
           ),
         ),
-        body: const TabBarView(children: [_Reports(), _Readers(), _Broadcast()]),
+        body: const TabBarView(children: [DashboardTab(), _Reports(), _Readers(), _Broadcast()]),
       ),
     );
   }

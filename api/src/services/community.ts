@@ -97,6 +97,8 @@ export interface CommunityStore {
   /** False if this reporter already reported it. Returns the target's open-report count. */
   addReport(report: Report): Promise<{ created: boolean; open: number }>;
   openReports(limit: number): Promise<Report[]>;
+  /** What the community holds right now, for the admin dashboard. */
+  counts(): Promise<CommunityCounts>;
   findReport(id: string): Promise<Report | null>;
   /** Closes every open report on a target. */
   resolveReports(kind: ReportKind, targetId: string, resolution: 'removed' | 'dismissed', at: number): Promise<void>;
@@ -107,6 +109,9 @@ export interface CommunityStore {
    */
   forgetUser(uid: string): Promise<void>;
 }
+
+/** Live recaps, live comments, and reports waiting on an admin. */
+export type CommunityCounts = { decks: number; comments: number; openReports: number };
 
 /** Reports that hide an item until an admin looks. */
 export const HIDE_AT = 3;
@@ -375,6 +380,13 @@ export function memoryCommunityStore(): CommunityStore & { decks: Map<string, De
     },
     async openReports(limit) {
       return [...reports.values()].filter((r) => r.resolvedAt === null).sort((a, b) => a.createdAt - b.createdAt).slice(0, limit);
+    },
+    async counts() {
+      return {
+        decks: [...decks.values()].filter((d) => d.status === 'live').length,
+        comments: [...comments.values()].filter((c) => c.status === 'live').length,
+        openReports: [...reports.values()].filter((r) => r.resolvedAt === null).length,
+      };
     },
     async findReport(id) {
       return reports.get(id) ?? null;

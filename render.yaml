@@ -43,6 +43,20 @@ services:
         sync: false          # RevenueCat secret key (sk_…), reads buyers' entitlements
       - key: REVENUECAT_WEBHOOK_AUTH
         sync: false          # the Authorization header value set on RevenueCat's webhook
+      - key: INCOME_CURRENCY
+        value: INR           # the admin dashboard adds ad and plan income up in this currency
+      - key: REVENUECAT_PROJECT_ID
+        sync: false          # admin dashboard: RevenueCat project id (Charts & Metrics API)
+      - key: REVENUECAT_METRICS_KEY
+        sync: false          # admin dashboard: a RevenueCat **v2** key with charts_metrics read
+      - key: ADMOB_PUBLISHER_ID
+        sync: false          # admin dashboard: AdMob publisher id (pub-…)
+      - key: ADMOB_CLIENT_ID
+        sync: false          # admin dashboard: OAuth client for the AdMob account
+      - key: ADMOB_CLIENT_SECRET
+        sync: false
+      - key: ADMOB_REFRESH_TOKEN
+        sync: false          # admin dashboard: see the README
       - key: AI_FREE_LIMIT
         value: "100"
       - key: AI_PRO_MONTHLY

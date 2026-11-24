@@ -10,6 +10,7 @@
  */
 import type { Claims } from '../auth/verifier.js';
 import type { Allowance } from './quota.js';
+import { dayKey, monthKey, windowDays } from '../lib/days.js';
 import { ApiError, messages } from '../lib/errors.js';
 
 export type Role = 'user' | 'admin';
@@ -19,6 +20,9 @@ const rank: Record<Tier, number> = { free: 0, pro: 1, super: 2 };
 
 /** The better of two plans: a purchase never takes away a granted plan, nor the reverse. */
 export const higherTier = (a: Tier, b: Tier): Tier => (rank[a] >= rank[b] ? a : b);
+
+/** A plan someone pays for (or was given): anything above Free. */
+export const paid = (tier: Tier) => tier !== 'free';
 
 export type User = {
   uid: string;
@@ -49,6 +53,30 @@ export type User = {
   banned: boolean;
   createdAt: number;
   updatedAt: number;
+};
+
+/**
+ * Counts for the admin dashboard, in one pass over the readers: who they are,
+ * what plan they're on, how the AI allowance is being used.
+ */
+export type ReaderStats = {
+  total: number;
+  /** Readers who signed in for the first time in the last 7 / 30 days. */
+  new7: number;
+  new30: number;
+  /** Readers whose plan came from a store purchase — they're paying now. */
+  paying: number;
+  /** Readers an admin put on a plan. */
+  granted: number;
+  banned: number;
+  admins: number;
+  tiers: Record<Tier, number>;
+  /** Phones registered for notifications. */
+  devices: { total: number; android: number; ios: number };
+  /** AI uses this calendar month across everyone, and ever. */
+  ai: { month: number; total: number };
+  /** New readers per day over the window asked for, oldest first. */
+  signups: { day: string; count: number }[];
 };
 
 export type ProfilePatch = Partial<Pick<User, 'displayName' | 'bio' | 'photoUrl' | 'reviewReminders'>>;
@@ -110,6 +138,11 @@ export interface AccountStore {
   searchUsers(q: string, limit: number): Promise<User[]>;
   /** Users with at least one phone for notifications, [tier] if given (broadcasts). */
   usersWithDevices(tier?: Tier): Promise<string[]>;
+  /**
+   * The dashboard's counts, for the [days] UTC days ending at [now]. It reads
+   * every reader, so it belongs to the admin screen and nothing on a hot path.
+   */
+  readerStats(opts: { now: number; days: number }): Promise<ReaderStats>;
   /**
    * Creates [user] unless one with that uid exists, atomically; returns
    * whichever is stored. A first sign-in fires several requests at once
@@ -334,6 +367,47 @@ export function memoryAccountStore(): AccountStore & { users: Map<string, User>;
     },
     async usersWithDevices(tier) {
       return [...users.values()].filter((u) => (devices.get(u.uid)?.length ?? 0) > 0 && (!tier || u.tier === tier)).map((u) => u.uid);
+    },
+    async readerStats({ now, days }) {
+      const month = monthKey(now);
+      const window = windowDays(now, days);
+      const signups = new Map<string, number>(window.map((day) => [day, 0]));
+      const stats: ReaderStats = {
+        total: 0,
+        new7: 0,
+        new30: 0,
+        paying: 0,
+        granted: 0,
+        banned: 0,
+        admins: 0,
+        tiers: { free: 0, pro: 0, super: 0 },
+        devices: { total: 0, android: 0, ios: 0 },
+        ai: { month: 0, total: 0 },
+        signups: [],
+      };
+      for (const u of users.values()) {
+        stats.total++;
+        if (u.createdAt >= now - 7 * 86_400_000) stats.new7++;
+        if (u.createdAt >= now - 30 * 86_400_000) stats.new30++;
+        if (paid(u.storeTier)) stats.paying++;
+        if (paid(u.grantTier)) stats.granted++;
+        if (u.banned) stats.banned++;
+        if (u.role === 'admin') stats.admins++;
+        stats.tiers[u.tier]++;
+        stats.ai.total += u.aiTotal;
+        if (u.aiMonth === month) stats.ai.month += u.aiMonthUses;
+        const day = dayKey(u.createdAt);
+        if (signups.has(day)) signups.set(day, signups.get(day)! + 1);
+      }
+      for (const list of devices.values()) {
+        for (const d of list) {
+          stats.devices.total++;
+          if (d.platform === 'android') stats.devices.android++;
+          if (d.platform === 'ios') stats.devices.ios++;
+        }
+      }
+      stats.signups = window.map((day) => ({ day, count: signups.get(day)! }));
+      return stats;
     },
     async insertUser(user) {
       const existing = users.get(user.uid);

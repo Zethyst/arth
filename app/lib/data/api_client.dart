@@ -9,6 +9,7 @@ import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/account.dart';
 import 'package:arth/data/community.dart';
 import 'package:arth/data/coupon.dart';
+import 'package:arth/data/metrics.dart';
 import 'package:dio/dio.dart';
 
 /// Base URL, set at build time:
@@ -291,6 +292,10 @@ class ApiClient {
 
   Future<AdminUser> adminUpdateUser(String uid, {String? tier, bool? banned}) =>
       _call(() => _dio.patch('/admin/users/$uid', data: {'tier': ?tier, 'banned': ?banned}), AdminUser.fromJson);
+
+  /// The dashboard: income over the last [days] days, and the readers behind it.
+  Future<AdminMetrics> adminMetrics({int days = 30}) =>
+      _call(() => _dio.get('/admin/metrics', queryParameters: {'days': days}), AdminMetrics.fromJson);
 
   Future<({int readers, int sent})> broadcast({required String title, required String body, String? tier}) => _call(
         () => _dio.post('/admin/broadcast', data: {'title': title, 'body': body, 'tier': ?tier}),
