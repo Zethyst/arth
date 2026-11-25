@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:arth/app/account_providers.dart';
-import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/account.dart';
 import 'package:arth/data/api_client.dart';
@@ -121,7 +120,7 @@ void main() {
     });
 
     test('never signed out, never for a reader who sees no ads', () async {
-      expect((await container(who: null)).read(canEarnAnswersProvider), isFalse);
+      expect((await container()).read(canEarnAnswersProvider), isFalse); // signed out
       expect((await container(who: account(), showAds: false)).read(canEarnAnswersProvider), isFalse);
     });
 
@@ -152,6 +151,14 @@ void main() {
             ),
           ),
         );
+
+    testWidgets('it is as tall as the ad, not as tall as the screen', (tester) async {
+      await pump(tester, showAds: true);
+      // A bare Center fills what the bottomNavigationBar slot offers, which
+      // is the whole screen: the footer then covers the page.
+      expect(tester.getSize(find.byType(AdFooter)).height, lessThan(100));
+      expect(find.text('the screen'), findsOneWidget);
+    });
 
     testWidgets('a paying reader gets nothing, and keeps the bar they had', (tester) async {
       await pump(tester, showAds: false);

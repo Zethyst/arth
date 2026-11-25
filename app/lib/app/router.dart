@@ -8,6 +8,7 @@ import 'package:arth/features/about/about_screen.dart';
 import 'package:arth/features/account/profile_screen.dart';
 import 'package:arth/features/account/sign_in_screen.dart';
 import 'package:arth/features/admin/admin_screen.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:arth/features/ads/ads.dart';
 import 'package:arth/features/cards/cards_screen.dart';
 import 'package:arth/features/cards/deck_screen.dart';
@@ -163,8 +164,10 @@ class _Shell extends ConsumerWidget {
       (Icons.forum_outlined, Icons.forum_rounded, t.tabCommunity),
       (Icons.person_outline_rounded, Icons.person_rounded, t.tabYou),
     ];
-    // Free tier: a banner above the tabs, except on You (settings, account).
-    final ads = ref.watch(showAdsProvider) && shell.currentIndex != 4;
+    // Free tier: a banner above the tabs, except on You (settings, account),
+    // and not while a screen pushed over the tabs carries its own footer:
+    // that banner is the one the reader can see (features/ads/ad_footer.dart).
+    final ads = ref.watch(showAdsProvider) && shell.currentIndex != 4 && ref.watch(adFootersProvider) == 0;
     return Scaffold(
       body: shell,
       bottomNavigationBar: Container(
