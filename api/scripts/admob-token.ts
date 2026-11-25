@@ -1,6 +1,7 @@
 /**
  * Gets the AdMob refresh token the admin dashboard reads earnings with.
  *
+ *   npm run admob-token            # reads ADMOB_CLIENT_ID / _SECRET from .env
  *   ADMOB_CLIENT_ID=… ADMOB_CLIENT_SECRET=… npm run admob-token
  *
  * AdMob has no service accounts, so the earnings can only be read as the Google
