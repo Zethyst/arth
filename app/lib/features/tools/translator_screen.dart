@@ -11,6 +11,8 @@ import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/api_client.dart';
+import 'package:arth/features/ads/ad_footer.dart';
+import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/tools/tool_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,11 +25,19 @@ class TranslatorScreen extends ConsumerStatefulWidget {
   ConsumerState<TranslatorScreen> createState() => _TranslatorScreenState();
 }
 
-class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
+class _TranslatorScreenState extends ConsumerState<TranslatorScreen> with AdBreakOnLeave<TranslatorScreen> {
   final _controller = TextEditingController();
   EnglishDraft? _draft;
   String? _error;
   bool _busy = false;
+
+  @override
+  AdBreak get adBreak => AdBreak.leftTool;
+
+  /// Only once it has translated something: a tool opened and closed again
+  /// is not a break, and an ad over nothing is just an ad.
+  @override
+  bool get adBreakEarned => _draft != null;
 
   @override
   void dispose() {
@@ -64,6 +74,7 @@ class _TranslatorScreenState extends ConsumerState<TranslatorScreen> {
     final draft = _draft;
     return Scaffold(
       appBar: AppBar(title: Text(t.translatorTitle)),
+      bottomNavigationBar: const AdFooter(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [

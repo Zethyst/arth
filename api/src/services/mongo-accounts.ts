@@ -23,6 +23,9 @@ function toUser(doc: Record<string, unknown>): User {
     aiTotal: (doc.aiTotal as number) ?? 0,
     aiMonth: (doc.aiMonth as string | null) ?? null,
     aiMonthUses: (doc.aiMonthUses as number) ?? 0,
+    aiBonus: (doc.aiBonus as number) ?? 0,
+    aiBonusDay: (doc.aiBonusDay as string | null) ?? null,
+    aiBonusDayCount: (doc.aiBonusDayCount as number) ?? 0,
     reviewReminders: (doc.reviewReminders as boolean | undefined) ?? true,
     lastReviewNudgeAt: (doc.lastReviewNudgeAt as number | null) ?? null,
     lowAiNoticeFor: (doc.lowAiNoticeFor as string | null) ?? null,
@@ -157,6 +160,24 @@ export const mongoAccountStore: AccountStore = {
   async refundAi(uid, month) {
     await UserModel.updateOne({ _id: uid, aiTotal: { $gt: 0 } }, { $inc: { aiTotal: -1 } });
     await UserModel.updateOne({ _id: uid, aiMonth: month, aiMonthUses: { $gt: 0 } }, { $inc: { aiMonthUses: -1 } });
+  },
+  async grantAiBonus(uid, day, uses, maxPerDay) {
+    // The day's count, as it will be before this ad: 0 on a new day.
+    const watched = { $cond: [{ $eq: ['$aiBonusDay', day] }, { $ifNull: ['$aiBonusDayCount', 0] }, 0] };
+    const doc = await UserModel.findOneAndUpdate(
+      { _id: uid, $or: [{ aiBonusDay: { $ne: day } }, { aiBonusDayCount: { $lt: maxPerDay } }] },
+      [
+        {
+          $set: {
+            aiBonus: { $add: [{ $ifNull: ['$aiBonus', 0] }, uses] },
+            aiBonusDayCount: { $add: [watched, 1] },
+            aiBonusDay: day,
+          },
+        },
+      ],
+      { new: true },
+    ).lean();
+    return doc ? toUser(doc) : null;
   },
   async consumeDeviceAi(deviceId, uid, max, maxAccounts) {
     const now = Date.now();

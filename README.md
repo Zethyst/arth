@@ -634,7 +634,8 @@ the same paragraph twice is charged once. When accounts are on
 work and refunded when no AI answer was served (single-sense words, failures). Background
 prefetch is free but only while allowance remains. Responses carry `x-ai-used` / `x-ai-limit` /
 `x-ai-period`; `402 QUOTA_EXCEEDED` includes the usage. Limits: `AI_FREE_LIMIT`,
-`AI_PRO_MONTHLY` (`api/src/services/quota.ts`). Without a Firebase project nothing is enforced.
+`AI_PRO_MONTHLY`, plus whatever the reader has earned from rewarded ads
+(`AI_AD_BONUS`, `api/src/services/quota.ts`). Without a Firebase project nothing is enforced.
 
 Tiers are set by hand until there are payments and an admin screen:
 
@@ -646,16 +647,39 @@ In the app, a signed-out or out-of-allowance reader sees *Sign in* / *See plans*
 answer would be (`app/lib/features/plans/`); the You tab shows what's left. **Plans** compares
 the tiers; *Ask for an upgrade* emails `ARTH_SUPPORT_EMAIL` (dart-define).
 
-Ads (`app/lib/features/ads/ads.dart`): Google Mobile Ads, a banner above the tab bar on Library,
-Dictionary and Cards for free/signed-out readers, never in a reader. Google's UMP consent form
-runs first where the law requires it; content is capped at PG. Without configuration Google's
-**test** units serve (safe to tap). For real ads:
+Ads (`app/lib/features/ads/`): Google Mobile Ads, free/signed-out readers only, never in a
+reader. Google's UMP consent form runs first where the law requires it; content is capped at PG.
+Without configuration Google's **test** units serve (safe to tap). Three formats:
 
-- Full-screen interstitials (`app/lib/features/ads/interstitials.dart`), free tier only, at natural
-  breaks: leaving a book read for 2+ minutes, finishing a Replay/Practice session. Never in the
-  first 2 minutes after launch, at most one per 6 minutes (`AdPacing`); one is kept preloaded.
+- **Banners.** Above the tab bar on Library, Dictionary, Cards and Community (`app/lib/app/router.dart`),
+  and at the foot of the screens pushed over them — the tools, the idiom and word-power lists, a
+  shared recap, the habit and archive screens — through `AdFooter` (`ads/ad_footer.dart`), which
+  draws nothing for a paying reader. Deliberately absent: the readers, **Plans** (an ad on the
+  screen that sells their removal), sign-in, the profile and admin screens, and *Say It Right*,
+  whose record button must not have a tappable ad beside it.
+- **Interstitials** (`ads/interstitials.dart`) at natural breaks only, listed by `AdBreak`: leaving
+  a book read for 2+ minutes, finishing a Replay/Practice session, finishing a round of idiom or
+  word-power practice, leaving a coaching conversation that was actually spoken in, and closing a
+  tool that had answered. Never in the first 2 minutes after launch, at most one per 6 minutes
+  (`AdPacing`), and never between a tap and the answer it asked for — so more break points raise
+  how often the one allowed ad is *reached*, not how many a reader sees. `AdBreakOnLeave` is the
+  mixin that fires one on the way out; one ad is kept preloaded.
+- **Rewarded** (`ads/rewarded.dart`): a Free reader who has spent their AI answers can watch one
+  ad for a few more. The offer (`ads/earn_answers.dart`) appears beside *See plans* on the word
+  and sentence cards and under the meter on **Plans**, and only for a signed-in free reader with
+  ads left today. `POST /v1/me/ai-bonus` grants `AI_AD_BONUS` uses (3), at most
+  `AI_AD_BONUS_PER_DAY` ads' worth a day (5); setting either to 0 turns the offer off everywhere.
+  The uses raise the allowance rather than discounting the count, so the per-phone Free cap rises
+  with it. The claim is the app's word that the reward was earned — the day's cap, not the claim,
+  is what keeps it honest; AdMob's server-side verification is the way to harden it if the numbers
+  ever justify the extra round trip.
+
+Configuration:
+
 - Ad units: `--dart-define=ADMOB_BANNER_ANDROID=…` / `ADMOB_BANNER_IOS=…`,
-  `ADMOB_INTERSTITIAL_ANDROID=…` / `ADMOB_INTERSTITIAL_IOS=…`
+  `ADMOB_INTERSTITIAL_ANDROID=…` / `ADMOB_INTERSTITIAL_IOS=…`,
+  `ADMOB_REWARDED_ANDROID=…` / `ADMOB_REWARDED_IOS=…` (in practice, keys in
+  `app/firebase.json`, which `--dart-define-from-file` reads).
 - App id: Android `ADMOB_APP_ID=…` in `android/key.properties`; iOS `ADMOB_APP_ID = …` in
   `ios/Flutter/Firebase.xcconfig` (overrides the test id in `AdMob.xcconfig`).
 - Play Console: declare that the app contains ads; App Store: the privacy label.

@@ -1,6 +1,13 @@
 // Full-screen ads for the free tier, at natural breaks only: leaving a book
-// after real reading, or finishing a Replay / Practice session. Never on
-// launch, never mid-reading, and at most one every few minutes.
+// after real reading, finishing a Replay / Practice session, leaving a
+// coaching conversation, or closing a tool that has already answered. Never
+// on launch, never mid-reading, never between a tap and the answer it asked
+// for, and at most one every few minutes.
+//
+// More breaks is not more ads: [AdPacing] allows one every [AdPacing.minGap]
+// however many breaks happen. What they buy is that the allowed one is
+// actually reached — a reader who only ever uses the tools used to hit no
+// break at all.
 //
 // One ad is kept loaded so it appears instantly at the break; after it's
 // shown (or fails) the next one loads. Ad units come from dart-defines;
@@ -26,6 +33,18 @@ enum AdBreak {
 
   /// Finished a Replay or Practice session.
   finishedReview,
+
+  /// Finished a round of idiom or word-power practice.
+  finishedPractice,
+
+  /// Left a coaching conversation the reader actually spoke in.
+  finishedCoach,
+
+  /// Closed a tool that had answered at least once. Fired on the way out,
+  /// never over the answer: an ad between "Translate" and the translation is
+  /// the one placement AdMob calls unexpected, and the one a learner would
+  /// not forgive.
+  leftTool,
 }
 
 /// When a full-screen ad may show. Pure, so it can be tested with a clock.
@@ -128,6 +147,39 @@ class Interstitials {
   void dispose() {
     unawaited(_ad?.dispose());
     _ad = null;
+  }
+}
+
+/// For screens whose break is the reader leaving: a finished round of
+/// practice, a coaching conversation they spoke in, a tool that answered.
+///
+/// The ad lands over whatever they went back to, which is the point — it is
+/// never between the reader and something they asked for. [adBreakEarned] is
+/// read while the state still exists, so it can look at the screen's own
+/// fields; a visit that earned nothing fires nothing.
+mixin AdBreakOnLeave<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  /// Which break leaving this screen is.
+  AdBreak get adBreak;
+
+  /// Whether this visit amounted to anything.
+  bool get adBreakEarned;
+
+  late final Interstitials _onLeave;
+
+  @override
+  void initState() {
+    super.initState();
+    // Captured now: `ref` can't be used once the widget is disposing.
+    _onLeave = ref.read(interstitialsProvider);
+  }
+
+  @override
+  void dispose() {
+    final earned = adBreakEarned;
+    final at = adBreak;
+    final interstitials = _onLeave;
+    super.dispose();
+    if (earned) scheduleMicrotask(() => interstitials.onBreak(at));
   }
 }
 

@@ -43,6 +43,12 @@ export type User = {
   /** The UTC month ("2026-09") [aiMonthUses] counts. */
   aiMonth: string | null;
   aiMonthUses: number;
+  /** AI uses earned by watching rewarded ads; raises the allowance. */
+  aiBonus: number;
+  /** The UTC day ("2026-11-25") [aiBonusDayCount] counts ads in. */
+  aiBonusDay: string | null;
+  /** Rewarded ads watched that day, against the per-day cap. */
+  aiBonusDayCount: number;
   /** Push a daily nudge when cards are due for review. */
   reviewReminders: boolean;
   /** When the last review reminder went out (ms), so it's at most daily. */
@@ -159,6 +165,13 @@ export interface AccountStore {
   /** Gives back a use counted by [consumeAi] in [month]. */
   refundAi(uid: string, month: string): Promise<void>;
   /**
+   * Adds [uses] to the reader's allowance for a rewarded ad they watched,
+   * atomically, unless [maxPerDay] ads already counted on the UTC [day].
+   * Null when the day is spent (or no such user), so a double-tapped reward
+   * can't pay twice.
+   */
+  grantAiBonus(uid: string, day: string, uses: number, maxPerDay: number): Promise<User | null>;
+  /**
    * Counts one Free-plan AI use against a phone, atomically, if it has room
    * (fewer than [max] uses) and [uid] is one of at most [maxAccounts]
    * accounts that have used it. Otherwise says why not.
@@ -233,6 +246,9 @@ export async function signIn(store: AccountStore, claims: Claims, now = Date.now
     aiTotal: 0,
     aiMonth: null,
     aiMonthUses: 0,
+    aiBonus: 0,
+    aiBonusDay: null,
+    aiBonusDayCount: 0,
     reviewReminders: true,
     lastReviewNudgeAt: null,
     lowAiNoticeFor: null,
@@ -440,6 +456,15 @@ export function memoryAccountStore(): AccountStore & { users: Map<string, User>;
         aiTotal: Math.max(0, u.aiTotal - 1),
         aiMonthUses: u.aiMonth === month ? Math.max(0, u.aiMonthUses - 1) : u.aiMonthUses,
       });
+    },
+    async grantAiBonus(uid, day, uses, maxPerDay) {
+      const u = users.get(uid);
+      if (!u) return null;
+      const watched = u.aiBonusDay === day ? u.aiBonusDayCount : 0;
+      if (watched >= maxPerDay) return null;
+      const next = { ...u, aiBonus: u.aiBonus + uses, aiBonusDay: day, aiBonusDayCount: watched + 1 };
+      users.set(uid, next);
+      return next;
     },
     async consumeDeviceAi(deviceId, uid, max, maxAccounts) {
       const d = phones.get(deviceId) ?? { used: 0, accounts: [] };

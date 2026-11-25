@@ -12,6 +12,7 @@ import 'package:arth/app/feel.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/local_store.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:arth/features/idioms/idiom_selection.dart';
 import 'package:arth/features/idioms/idiom_widgets.dart';
@@ -129,6 +130,7 @@ class _IdiomsScreenState extends ConsumerState<IdiomsScreen> with SingleTickerPr
           ),
         ],
       ),
+      bottomNavigationBar: const AdFooter(),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
         child: Column(

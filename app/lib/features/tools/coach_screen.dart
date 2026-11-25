@@ -18,6 +18,7 @@ import 'package:arth/app/strings.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/api_client.dart';
+import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/tools/coach_session.dart';
 import 'package:arth/features/tools/listening.dart';
 import 'package:arth/features/tools/say_it_right_screen.dart' show listeningProvider;
@@ -97,12 +98,20 @@ class CoachCallScreen extends ConsumerStatefulWidget {
   ConsumerState<CoachCallScreen> createState() => _CoachCallScreenState();
 }
 
-class _CoachCallScreenState extends ConsumerState<CoachCallScreen> {
+class _CoachCallScreenState extends ConsumerState<CoachCallScreen> with AdBreakOnLeave<CoachCallScreen> {
   late final CoachSession _session = CoachSession(widget.scene);
   final _draft = TextEditingController();
   final _scroll = ScrollController();
   String? _error;
   ListenBlock? _blocked;
+
+  @override
+  AdBreak get adBreak => AdBreak.finishedCoach;
+
+  /// A conversation they actually spoke in. Opening a scene and backing out
+  /// of it earns nothing.
+  @override
+  bool get adBreakEarned => _session.replies > 0;
 
   @override
   void initState() {

@@ -4,7 +4,7 @@ import { avatarTicket, type CloudinaryConfig } from '../lib/cloudinary.js';
 import { ok } from '../lib/envelope.js';
 import { ApiError, messages } from '../lib/errors.js';
 import { signIn, sync, updateProfile, type AccountStore, type ProfilePatch, type SyncRequest, type User } from '../services/accounts.js';
-import { defaultLimits, usageOf, type Limits } from '../services/quota.js';
+import { adsLeftToday, dayOf, defaultLimits, usageOf, type Limits } from '../services/quota.js';
 import { deviceIdOf, withPhone } from '../auth/device.js';
 import { disabledPusher, type Pusher } from '../push/pusher.js';
 import { notifyUser, testMessage } from '../push/notify.js';
@@ -88,8 +88,27 @@ const bookmarkDefaults = { bookKey: null, bookTitle: null, block: null, label: n
 
 /** The user as the app sees them: profile, tier, and AI usage. */
 const view = (user: User, limits: Limits, phoneUsed = 0) => {
-  const { aiTotal: _t, aiMonth: _m, aiMonthUses: _u, lastReviewNudgeAt: _r, lowAiNoticeFor: _l, grantTier: _g, storeTier: _s, ...profile } = user;
-  return { ...profile, usage: withPhone(usageOf(user, limits), user.role === 'admin' ? 0 : phoneUsed) };
+  const {
+    aiTotal: _t,
+    aiMonth: _m,
+    aiMonthUses: _u,
+    aiBonus: _b,
+    aiBonusDay: _bd,
+    aiBonusDayCount: _bc,
+    lastReviewNudgeAt: _r,
+    lowAiNoticeFor: _l,
+    grantTier: _g,
+    storeTier: _s,
+    ...profile
+  } = user;
+  return {
+    ...profile,
+    usage: withPhone(usageOf(user, limits), user.role === 'admin' ? 0 : phoneUsed),
+    // What one rewarded ad buys and how many are left today; either at 0
+    // hides the offer, so the app never promises an ad it can't pay for.
+    adBonus: limits.adBonus ?? 0,
+    adsLeftToday: adsLeftToday(user, limits),
+  };
 };
 
 export const accountRoutes: FastifyPluginAsync<AccountDeps & { limits?: Limits }> = async (app, { limits = defaultLimits, ...deps }) => {
@@ -101,6 +120,37 @@ export const accountRoutes: FastifyPluginAsync<AccountDeps & { limits?: Limits }
   app.get('/me', async (req) => {
     const device = deviceIdOf(req);
     return ok(view(req.user!, limits, device ? await deps.store.deviceAiUsed(device) : 0));
+  });
+
+  /**
+   * A watched rewarded ad, paid for in AI answers.
+   *
+   * The app calls this when AdMob says the reader earned the reward. That is
+   * the app's word for it, so the day's cap — not the claim — is what keeps
+   * the allowance honest: a tampered build can earn at most
+   * [Limits.adBonusPerDay] ads' worth a day, which costs less than one AI
+   * answer of a paid plan. AdMob's server-side verification would make the
+   * claim provable; it needs a public callback and a second round trip, and
+   * is the way to harden this if the numbers ever justify it.
+   *
+   * Never an error: a reader who watched a whole ad and then found the day
+   * spent (two phones, a double tap) is told so, not failed at.
+   */
+  app.post('/me/ai-bonus', async (req) => {
+    const user = req.user!;
+    const uses = limits.adBonus ?? 0;
+    const perDay = limits.adBonusPerDay ?? 0;
+    const now = Date.now();
+    const granted = uses > 0 && perDay > 0 ? await deps.store.grantAiBonus(user.uid, dayOf(now), uses, perDay) : null;
+    const after = granted ?? user;
+    const device = deviceIdOf(req);
+    const phoneUsed = device ? await deps.store.deviceAiUsed(device) : 0;
+    return ok({
+      granted: granted ? uses : 0,
+      usage: withPhone(usageOf(after, limits, now), after.role === 'admin' ? 0 : phoneUsed),
+      adBonus: uses,
+      adsLeftToday: adsLeftToday(after, limits, now),
+    });
   });
 
   app.patch<{ Body: ProfilePatch }>(

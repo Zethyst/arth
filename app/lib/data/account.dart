@@ -5,7 +5,7 @@ enum Tier { free, pro, superTier }
 
 /// AI uses against the tier's allowance (api/src/services/quota.ts).
 class Usage {
-  const Usage({required this.used, required this.limit, required this.monthly, this.resetsAt, this.phone = false});
+  const Usage({required this.used, required this.limit, required this.monthly, this.resetsAt, this.phone = false, this.bonus = 0});
 
   factory Usage.fromJson(Map<String, dynamic> j) => Usage(
         used: (j['used'] as int?) ?? 0,
@@ -13,6 +13,7 @@ class Usage {
         monthly: j['period'] == 'month',
         resetsAt: j['resetsAt'] == null ? null : DateTime.fromMillisecondsSinceEpoch(j['resetsAt'] as int),
         phone: j['phone'] == true,
+        bonus: (j['bonus'] as int?) ?? 0,
       );
 
   /// From the `x-ai-*` headers an AI response carries; null if absent.
@@ -35,6 +36,9 @@ class Usage {
   /// it), not by the account.
   final bool phone;
 
+  /// Uses earned by watching rewarded ads; already counted in [limit].
+  final int bonus;
+
   int? get left => limit == null ? null : (limit! - used).clamp(0, limit!);
   bool get exhausted => limit != null && used >= limit!;
 }
@@ -48,6 +52,8 @@ class Account {
     required this.tier,
     this.reviewReminders = true,
     this.usage,
+    this.adBonus = 0,
+    this.adsLeftToday = 0,
     this.email,
     this.phone,
     this.photoUrl,
@@ -67,6 +73,8 @@ class Account {
           _ => Tier.free,
         },
         usage: j['usage'] == null ? null : Usage.fromJson(j['usage'] as Map<String, dynamic>),
+        adBonus: (j['adBonus'] as int?) ?? 0,
+        adsLeftToday: (j['adsLeftToday'] as int?) ?? 0,
         reviewReminders: (j['reviewReminders'] as bool?) ?? true,
       );
 
@@ -80,11 +88,35 @@ class Account {
   final Tier tier;
   final Usage? usage;
 
+  /// AI answers one rewarded ad buys; 0 when the server has the offer off.
+  final int adBonus;
+
+  /// Rewarded ads this reader may still watch today.
+  final int adsLeftToday;
+
   /// A daily nudge when cards are due.
   final bool reviewReminders;
 
   /// What to call them: their name, else how they signed in.
   String get label => displayName.isNotEmpty ? displayName : (email ?? phone ?? '');
+}
+
+/// What a watched rewarded ad bought: [granted] uses (0 when the day's ads
+/// were already spent), and where that leaves the reader.
+class AdBonus {
+  const AdBonus({required this.granted, required this.usage, required this.adBonus, required this.adsLeftToday});
+
+  factory AdBonus.fromJson(Map<String, dynamic> j) => AdBonus(
+        granted: (j['granted'] as int?) ?? 0,
+        usage: j['usage'] == null ? null : Usage.fromJson(j['usage'] as Map<String, dynamic>),
+        adBonus: (j['adBonus'] as int?) ?? 0,
+        adsLeftToday: (j['adsLeftToday'] as int?) ?? 0,
+      );
+
+  final int granted;
+  final Usage? usage;
+  final int adBonus;
+  final int adsLeftToday;
 }
 
 class SyncPage {

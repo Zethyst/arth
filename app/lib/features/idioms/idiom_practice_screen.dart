@@ -10,6 +10,7 @@ import 'package:arth/app/feel.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/local_store.dart';
+import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/idioms/idiom_providers.dart';
 import 'package:arth/features/idioms/idiom_selection.dart';
 import 'package:arth/features/practice/practice_option.dart';
@@ -24,11 +25,19 @@ class IdiomPracticeScreen extends ConsumerStatefulWidget {
   ConsumerState<IdiomPracticeScreen> createState() => _IdiomPracticeScreenState();
 }
 
-class _IdiomPracticeScreenState extends ConsumerState<IdiomPracticeScreen> {
+class _IdiomPracticeScreenState extends ConsumerState<IdiomPracticeScreen> with AdBreakOnLeave<IdiomPracticeScreen> {
   late int _seed = DateTime.now().millisecondsSinceEpoch;
   List<IdiomQuestion>? _round;
   int _index = 0;
   int _right = 0;
+
+  @override
+  AdBreak get adBreak => AdBreak.finishedPractice;
+
+  /// A round answered to the end — the score screen, not a quiz abandoned
+  /// halfway.
+  @override
+  bool get adBreakEarned => _round != null && _round!.isNotEmpty && _index >= _round!.length;
 
   /// The option the reader picked, or null while the question is open.
   int? _picked;

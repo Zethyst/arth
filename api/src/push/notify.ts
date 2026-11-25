@@ -9,7 +9,7 @@
  * Plus a test push a signed-in reader can send themselves.
  */
 import type { AccountStore, Lang, Tier, User } from '../services/accounts.js';
-import { allowanceFor, monthOf, type Limits } from '../services/quota.js';
+import { allowanceOf, monthOf, type Limits } from '../services/quota.js';
 import type { PushMessage, Pusher } from './pusher.js';
 
 export type Localized = (lang: Lang) => PushMessage;
@@ -90,7 +90,9 @@ export const LOW_AI_AT = { free: 10, pro: 50 } as const;
  * threshold is left. [user] is the state after the use was counted.
  */
 export async function maybeWarnLowAi(store: AccountStore, pusher: Pusher, user: User, limits: Limits, now = Date.now()): Promise<boolean> {
-  const a = allowanceFor(user.tier, limits);
+  // Earned uses count: a reader who just watched an ad for three more
+  // answers must not be told in the same breath that ten are left.
+  const a = allowanceOf(user, limits);
   if (a.period === 'none' || user.tier === 'super') return false;
   const period = a.period === 'lifetime' ? 'lifetime' : monthOf(now);
   const used = a.period === 'lifetime' ? user.aiTotal : user.aiMonthUses;

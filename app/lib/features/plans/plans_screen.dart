@@ -15,6 +15,7 @@ import 'package:arth/data/account.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/billing.dart';
 import 'package:arth/data/coupon.dart';
+import 'package:arth/features/ads/earn_answers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -231,6 +232,8 @@ class _PlansScreenState extends ConsumerState<PlansScreen> {
           if (usage != null) ...[
             const SizedBox(height: 18),
             _Meter(usage: usage),
+            const SizedBox(height: 12),
+            const EarnAnswers(),
           ],
           const SizedBox(height: 22),
           if (billing.available) ...[

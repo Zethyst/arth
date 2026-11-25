@@ -160,7 +160,7 @@ describe('sync', () => {
 
   test('last write wins by updatedAt; a stale edit is ignored', async () => {
     const s = memoryAccountStore();
-    await s.insertUser({ uid: 'd', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
+    await s.insertUser({ uid: 'd', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, aiBonus: 0, aiBonusDay: null, aiBonusDayCount: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
     await sync(s, 'd', { cursor: 0, cards: [card(id(2), 200, { front: 'new' })], bookmarks: [] });
     const stale = await sync(s, 'd', { cursor: 0, cards: [card(id(2), 150, { front: 'old' })], bookmarks: [] });
     assert.equal(stale.accepted, 0);
@@ -182,7 +182,7 @@ describe('sync', () => {
 
   test('pages through a long history without skipping rows', async () => {
     const s = memoryAccountStore();
-    await s.insertUser({ uid: 'f', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
+    await s.insertUser({ uid: 'f', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, aiBonus: 0, aiBonusDay: null, aiBonusDayCount: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
     const rows = Array.from({ length: 7 }, (_, i) => card(id(100 + i), 10 + i));
     await sync(s, 'f', { cursor: 0, cards: rows.slice(0, 4), bookmarks: [] });
     await sync(s, 'f', {
@@ -204,7 +204,7 @@ describe('sync', () => {
 
   test('a batch wider than one push wave keeps every row, each with its own place in the sequence', async () => {
     const s = memoryAccountStore();
-    await s.insertUser({ uid: 'g', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
+    await s.insertUser({ uid: 'g', displayName: '', email: null, phone: null, photoUrl: null, bio: '', role: 'user', tier: 'free', grantTier: 'free', storeTier: 'free', aiTotal: 0, aiMonth: null, aiMonthUses: 0, aiBonus: 0, aiBonusDay: null, aiBonusDayCount: 0, reviewReminders: true, lastReviewNudgeAt: null, lowAiNoticeFor: null, banned: false, createdAt: 0, updatedAt: 0 });
     // More rows than go up at once: a first sync sends hundreds.
     const rows = Array.from({ length: 70 }, (_, i) => card(id(300 + i), 10));
     const push = await sync(s, 'g', { cursor: 0, cards: rows, bookmarks: [] });

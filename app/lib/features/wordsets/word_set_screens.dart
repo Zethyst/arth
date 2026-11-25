@@ -13,6 +13,8 @@ import 'package:arth/app/strings.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/text/word_sets.dart';
 import 'package:arth/data/local_store.dart';
+import 'package:arth/features/ads/ad_footer.dart';
+import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/practice/practice_option.dart';
 import 'package:arth/features/wordsets/word_set_practice.dart';
 import 'package:arth/features/wordsets/word_set_providers.dart';
@@ -53,6 +55,7 @@ class WordPowerScreen extends ConsumerWidget {
     final scale = ref.watch(settingsProvider).hindiScale;
     return Scaffold(
       appBar: AppBar(title: Text(t.wordPowerTitle)),
+      bottomNavigationBar: const AdFooter(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
@@ -362,12 +365,18 @@ class WordSetPracticeScreen extends ConsumerStatefulWidget {
   ConsumerState<WordSetPracticeScreen> createState() => _WordSetPracticeScreenState();
 }
 
-class _WordSetPracticeScreenState extends ConsumerState<WordSetPracticeScreen> {
+class _WordSetPracticeScreenState extends ConsumerState<WordSetPracticeScreen> with AdBreakOnLeave<WordSetPracticeScreen> {
   late int _seed = DateTime.now().millisecondsSinceEpoch;
   List<WordSetQuestion>? _round;
   int _index = 0;
   int _right = 0;
   int? _picked;
+
+  @override
+  AdBreak get adBreak => AdBreak.finishedPractice;
+
+  @override
+  bool get adBreakEarned => _round != null && _round!.isNotEmpty && _index >= _round!.length;
 
   void _restart() => setState(() {
         _seed = DateTime.now().millisecondsSinceEpoch;

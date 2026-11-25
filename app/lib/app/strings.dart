@@ -755,6 +755,13 @@ enum AppStrings {
       );
   String aiQuotaResets(String date) => _('You’ve used this month’s AI answers. More on $date; the offline dictionary still works.', 'इस महीने के AI जवाब खत्म हो गए। $date से फिर मिलेंगे; ऑफ़लाइन शब्दकोश चलता रहेगा।');
   String get seePlans => _('See plans', 'प्लान देखें');
+
+  // ---- earning AI answers by watching an ad ----
+  String earnAnswers(int n) => _('Watch a short ad for $n more answers', '$n और जवाब पाने के लिए एक छोटा विज्ञापन देखें');
+  String get earnAnswersBusy => _('Loading the ad…', 'विज्ञापन आ रहा है…');
+  String earnedAnswers(int n) => _('$n more AI answers added.', '$n और AI जवाब जुड़ गए।');
+  String get earnAnswersNoAd => _('No ad right now. Try again in a minute.', 'अभी कोई विज्ञापन नहीं है। एक मिनट बाद कोशिश करें।');
+  String get earnAnswersDoneToday => _('That’s all of today’s ads. More tomorrow.', 'आज के विज्ञापन खत्म। कल और मिलेंगे।');
   String get planCheckFailed => _('We couldn’t check your plan. Check your connection and try again.', 'आपका प्लान जाँच नहीं पाए। इंटरनेट देखकर फिर कोशिश करें।');
   String get planCheckAgain => _('Already have a plan? Check again', 'प्लान ले लिया है? दोबारा देखें');
   String get planStillFree => _('This account is still on the free plan.', 'यह खाता अभी भी मुफ़्त प्लान पर है।');

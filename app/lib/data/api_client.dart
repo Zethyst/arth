@@ -122,6 +122,16 @@ class ApiClient {
     }
   }
 
+  /// Claims the AI answers a watched rewarded ad is worth. Never fails for
+  /// a spent day: the answer says `granted: 0` and how many ads are left.
+  Future<AdBonus> claimAdBonus() async {
+    try {
+      return AdBonus.fromJson(_data(await _dio.post<Map<String, dynamic>>('/me/ai-bonus')));
+    } on DioException catch (e) {
+      throw _failure(e);
+    }
+  }
+
   /// Changes the profile; pass [clearPhoto] to remove the photo.
   Future<Account> updateMe({String? displayName, String? bio, String? photoUrl, bool clearPhoto = false}) async {
     try {

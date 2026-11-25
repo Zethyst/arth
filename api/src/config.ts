@@ -81,6 +81,10 @@ const EnvSchema = z.object({
   AI_SUPER_MONTHLY: z.coerce.number().int().positive().default(5000),
   AI_FREE_ACCOUNTS_PER_DEVICE: z.coerce.number().int().positive().default(3),
   AI_PRO_MONTHLY: z.coerce.number().int().positive().default(500),
+  /** AI answers earned by watching one rewarded ad; 0 turns the offer off. */
+  AI_AD_BONUS: z.coerce.number().int().min(0).default(3),
+  /** Rewarded ads that count in a UTC day, per reader. */
+  AI_AD_BONUS_PER_DAY: z.coerce.number().int().min(0).default(5),
 });
 
 export type Config = z.infer<typeof EnvSchema>;

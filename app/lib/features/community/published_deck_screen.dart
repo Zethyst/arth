@@ -10,6 +10,7 @@ import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/api_client.dart';
 import 'package:arth/data/community.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:arth/features/cards/card_face.dart';
 import 'package:arth/features/cards/quote_image.dart';
 import 'package:arth/features/community/community_lock.dart';
@@ -436,7 +437,7 @@ class _PublishedDeckScreenState extends ConsumerState<PublishedDeckScreen> {
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
       ),
-      bottomNavigationBar: _composer(context),
+      bottomNavigationBar: AdFooter(below: _composer(context)),
     );
   }
 

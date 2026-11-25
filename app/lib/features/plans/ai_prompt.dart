@@ -7,6 +7,7 @@ import 'package:arth/app/account_providers.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/data/api_client.dart';
+import 'package:arth/features/ads/earn_answers.dart';
 import 'package:arth/features/reader/reader_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,6 +63,11 @@ class AiPrompt extends ConsumerWidget {
               Expanded(child: Text(message, style: uiBody(hindi: t.isHindi, color: c.ink, scale: scale, size: 14))),
             ],
           ),
+          // Out of answers, not signed out: an ad buys a few more. It sits
+          // beside the price list, never instead of it, and the card is
+          // left standing so the word can be tapped again straight after.
+          if (!signIn)
+            const EarnAnswers(dense: true),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(

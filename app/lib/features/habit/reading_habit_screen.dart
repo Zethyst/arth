@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/reading_stats.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,6 +46,7 @@ class ReadingHabitScreen extends ConsumerWidget {
     final goal = ref.watch(readingGoalProvider).valueOrNull ?? _defaultGoal;
     return Scaffold(
       appBar: AppBar(title: Text(t.readingHabit)),
+      bottomNavigationBar: const AdFooter(),
       body: stats.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(child: Text(t.somethingWrong, style: uiBody(hindi: t.isHindi, color: c.inkMuted, scale: scale))),

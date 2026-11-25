@@ -17,6 +17,10 @@ const userSchema = new Schema(
     aiTotal: { type: Number, default: 0 },
     aiMonth: { type: String, default: null },
     aiMonthUses: { type: Number, default: 0 },
+    /** AI uses earned by watching rewarded ads, and today's ad count. */
+    aiBonus: { type: Number, default: 0 },
+    aiBonusDay: { type: String, default: null },
+    aiBonusDayCount: { type: Number, default: 0 },
     reviewReminders: { type: Boolean, default: true },
     lastReviewNudgeAt: { type: Number, default: null },
     lowAiNoticeFor: { type: String, default: null },

@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiError, messages } from '../lib/errors.js';
 import { authenticate, type AccountDeps } from '../routes/account.js';
-import { allowanceFor, hasRemaining, monthOf, usageOf, type Limits, type Usage } from '../services/quota.js';
+import { allowanceOf, hasRemaining, monthOf, usageOf, type Limits, type Usage } from '../services/quota.js';
 import { maybeWarnLowAi } from '../push/notify.js';
 import { deviceIdOf, withPhone } from './device.js';
 
@@ -60,7 +60,9 @@ export function aiGate(deps: AccountDeps, limits: Limits): AiGate {
     const now = Date.now();
     const exceeded = (usage: Usage, extra: object = {}) => new ApiError('QUOTA_EXCEEDED', messages.quotaExceeded, { usage, ...extra });
     // The Free allowance is also per phone, so a new email doesn't reset it.
-    const allowance = allowanceFor(user.tier, limits);
+    // Uses earned from rewarded ads are in here, so they lift both caps —
+    // an earned answer the phone's cap then refused would be a cheat.
+    const allowance = allowanceOf(user, limits);
     const perPhone = allowance.period === 'lifetime' && user.role !== 'admin';
     const device = deviceIdOf(req);
     if (perPhone && device === null) throw new ApiError('BAD_REQUEST', messages.deviceRequired);

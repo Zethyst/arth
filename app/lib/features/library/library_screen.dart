@@ -13,6 +13,7 @@ import 'package:arth/app/theme.dart';
 import 'package:arth/core/book_key.dart';
 import 'package:arth/core/formats/reflow_book.dart';
 import 'package:arth/data/local_store.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:arth/features/cards/deck_screen.dart';
 import 'package:arth/features/library/book_category.dart';
 import 'package:arth/features/library/book_cover.dart';
@@ -739,6 +740,7 @@ class ArchiveScreen extends ConsumerWidget {
     final books = ref.watch(libraryProvider);
     return Scaffold(
       appBar: AppBar(title: Text(t.archive)),
+      bottomNavigationBar: const AdFooter(),
       body: books.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(

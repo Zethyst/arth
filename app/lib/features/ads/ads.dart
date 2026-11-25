@@ -1,6 +1,7 @@
-// Banner ads for the free tier, never inside the reader: the Library,
-// Dictionary and Cards tabs carry one above the navigation bar. Pro and
-// Super see none.
+// Banner ads for the free tier, never inside the reader: the tabs carry one
+// above the navigation bar (app/router.dart), and the screens pushed over
+// them carry one at the foot (features/ads/ad_footer.dart). Pro and Super
+// see none.
 //
 // Consent first (Google's UMP: a form where the law requires one, e.g. the
 // EEA/UK), then the SDK. Ad units come from dart-defines; without them,
@@ -16,6 +17,7 @@ import 'dart:io';
 import 'package:arth/app/account_providers.dart';
 import 'package:arth/data/account.dart';
 import 'package:arth/features/ads/interstitials.dart';
+import 'package:arth/features/ads/rewarded.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,8 +56,11 @@ Future<void> initAds(ProviderContainer container) async {
     // A reading app for learners: keep ads to general audiences.
     await MobileAds.instance.updateRequestConfiguration(RequestConfiguration(maxAdContentRating: MaxAdContentRating.pg));
     container.read(adsReadyProvider.notifier).markReady();
-    // Preload the first full-screen ad so a break never waits on the network.
-    container.read(interstitialsProvider);
+    // Preload the first full-screen ad so a break never waits on the network,
+    // and the rewarded one so the offer at the wall is instant when taken.
+    container
+      ..read(interstitialsProvider)
+      ..read(rewardedProvider);
   } on Exception catch (e) {
     debugPrint('ads off: $e');
   }

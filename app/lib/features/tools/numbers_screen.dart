@@ -12,6 +12,7 @@
 import 'package:arth/app/feel.dart';
 import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
+import 'package:arth/features/ads/ad_footer.dart';
 import 'package:arth/features/tools/numbers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,6 +79,7 @@ class _NumbersScreenState extends ConsumerState<NumbersScreen> {
         : kHindiNumbers.sublist(_decade * 10, _decade * 10 + 10);
     return Scaffold(
       appBar: AppBar(title: Text(t.numbersTitle)),
+      bottomNavigationBar: const AdFooter(),
       body: Column(
         // Everything on this screen is set against the left margin. Without
         // this the column centres whatever doesn't fill the width, which the

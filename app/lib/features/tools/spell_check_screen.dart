@@ -11,6 +11,8 @@ import 'package:arth/app/providers.dart';
 import 'package:arth/app/theme.dart';
 import 'package:arth/core/models/contracts.dart';
 import 'package:arth/data/api_client.dart';
+import 'package:arth/features/ads/ad_footer.dart';
+import 'package:arth/features/ads/interstitials.dart';
 import 'package:arth/features/tools/tool_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,12 +25,18 @@ class SpellCheckScreen extends ConsumerStatefulWidget {
   ConsumerState<SpellCheckScreen> createState() => _SpellCheckScreenState();
 }
 
-class _SpellCheckScreenState extends ConsumerState<SpellCheckScreen> {
+class _SpellCheckScreenState extends ConsumerState<SpellCheckScreen> with AdBreakOnLeave<SpellCheckScreen> {
   final _controller = TextEditingController();
   Proofread? _result;
   String? _checked;
   String? _error;
   bool _busy = false;
+
+  @override
+  AdBreak get adBreak => AdBreak.leftTool;
+
+  @override
+  bool get adBreakEarned => _result != null;
 
   @override
   void dispose() {
@@ -77,6 +85,7 @@ class _SpellCheckScreenState extends ConsumerState<SpellCheckScreen> {
     final checked = _checked;
     return Scaffold(
       appBar: AppBar(title: Text(t.spellCheckTitle)),
+      bottomNavigationBar: const AdFooter(),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [

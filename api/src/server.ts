@@ -71,6 +71,8 @@ const app = buildApp({
     proMonthly: config.AI_PRO_MONTHLY,
     superMonthly: config.AI_SUPER_MONTHLY,
     freeAccountsPerDevice: config.AI_FREE_ACCOUNTS_PER_DEVICE,
+    adBonus: config.AI_AD_BONUS,
+    adBonusPerDay: config.AI_AD_BONUS_PER_DAY,
   },
 });
 
